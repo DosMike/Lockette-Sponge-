@@ -1,0 +1,11 @@
+[{
+    "modid": "dosmike_lockette",
+    "name": "Lockette",
+    "version": "1.0",
+    "description": "Allows you to lock doors and containers with a sign or other plugins",
+    "authorList": [
+        "DosMike"
+    ],
+    "dependencies": [
+    ]
+}]
