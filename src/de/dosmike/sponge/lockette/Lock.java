@@ -1,6 +1,6 @@
 package de.dosmike.sponge.lockette;
 
-import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 
 import org.spongepowered.api.entity.living.player.Player;
@@ -8,12 +8,12 @@ import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
 public class Lock {
-	Set<UUID> permitted;
+	List<UUID> permitted;
 	
 	Location<World> target; //this value is reflected in the parents lock map
 	
 	Lock() {}
-	Lock(Location<World> target, Set<UUID> permitted) {
+	Lock(Location<World> target, List<UUID> permitted) {
 		this.permitted = permitted;
 		this.target = target;
 	}

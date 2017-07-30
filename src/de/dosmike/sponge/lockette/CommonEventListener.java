@@ -1,15 +1,12 @@
 package de.dosmike.sponge.lockette;
 
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockSnapshot;
-import org.spongepowered.api.block.BlockTypes;
 import org.spongepowered.api.data.Transaction;
 import org.spongepowered.api.entity.explosive.Explosive;
 import org.spongepowered.api.entity.living.player.Player;
@@ -17,13 +14,14 @@ import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.block.ChangeBlockEvent;
 import org.spongepowered.api.event.block.InteractBlockEvent;
 import org.spongepowered.api.event.block.tileentity.ChangeSignEvent;
-import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.event.world.ExplosionEvent;
 import org.spongepowered.api.plugin.PluginContainer;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
+
+import com.flowpowered.math.vector.Vector3i;
 
 public class CommonEventListener {
 	static final Text locketteSignIdentifier = Text.of(TextColors.DARK_BLUE, "[Lockette]");
@@ -33,50 +31,10 @@ public class CommonEventListener {
 		owner=plugin;
 	}
 	
-	@Listener
+	//doesn't work at all for signs! (unable to fetch sign data at this point)
+	/*@Listener
 	public void onBlockBreak(ChangeBlockEvent.Break event) {
-		if (event.getCause().contains(owner)) {
-			Lockette.log("Change by Lockette (Authorised break lock)");
-			return;
-		}
-		
-		Optional<Player> source = event.getCause().first(Player.class);
-		if (!source.isPresent()) {
-			Lockette.log("Change not caused by player");
-			return;
-		}
-		Lockette.log("Change caused by " + source.get().getName());
-		
-		Set<Location<World>> directlyAffected = new HashSet<>();
-		Set<Location<World>> targets = new HashSet<>();
-		Set<Lock> locks = new HashSet<>();
-		List<Transaction<BlockSnapshot>> trans = event.getTransactions();
-		for (Transaction<BlockSnapshot> tran : trans) {
-			if (tran.isValid()) {
-				Optional<Location<World>> src = tran.getOriginal().getLocation();
-				if (src.isPresent()) {
-					targets.addAll(Lockette.getInvolvedBlocks(src.get()));
-					directlyAffected.add(src.get());
-				}
-			}
-		}
-		locks.addAll(Lockette.signsToLocks(targets));
-		if (locks.isEmpty()) {
-			Lockette.log("No locks found");
-			return;
-		}
-		
-		if (!Lockette.hasAccess(source.get(), locks)) {
-			Lockette.log("Source not authorized!");
-			event.setCancelled(true);
-		}
-		
-		Cause breakAllLocks = Cause.source(owner).suggestNamed("Authorized break lock", event.getCause()).build();
-		targets.removeAll(directlyAffected);
-		for (Location<World> target : targets) {
-			target.setBlockType(BlockTypes.AIR, breakAllLocks);
-		}
-	}
+	}*/
 	
 	@Listener
 	public void onExplosion(ExplosionEvent.Detonate event) {
@@ -98,7 +56,9 @@ public class CommonEventListener {
 	
 	@Listener
 	public void onChangeSign(ChangeSignEvent event) {
-		Optional<Location<World>> target = Lockette.findLockettable(event.getTargetTile().getLocation());
+		LockScanner scanner = new LockScanner(event.getTargetTile().getWorld()); 
+		Optional<Vector3i> target = 
+				scanner.findLockettable(event.getTargetTile().getLocation().getBlockPosition());
 		if (!target.isPresent()) return;
 		
 		List<Text> lines = event.getText().getListValue().get();
@@ -107,7 +67,7 @@ public class CommonEventListener {
 			//something tries to lock this container
 			if (source.isPresent()) {
 				//a player tries to lock, check privileges
-				if (!Lockette.hasAccess(source.get(), target.get())) {
+				if (!Lockette.hasAccess(source.get(), scanner.getExtentDelta(), target.get())) {
 					source.get().sendMessage(Text.of("[Lockette] You are not permitted to add additional locks"));
 					event.setCancelled(true);
 					return;
@@ -122,7 +82,6 @@ public class CommonEventListener {
 			} else {
 				Lockette.log("[Lockette] Locked by magic!");
 			}
-			//Lockette.log(event.getCause().toString());
 
 			//if the source is no player we assume something with admin rights is doing this (probably another plugin)
 			lines.set(0, locketteSignIdentifier);
@@ -131,7 +90,7 @@ public class CommonEventListener {
 	}
 	
 	@Listener
-	public void onInteract(InteractBlockEvent.Secondary event) {
+	public void onInteract(InteractBlockEvent event) {
 		Optional<Location<World>> target = event.getTargetBlock().getLocation();
 		if (!target.isPresent()) return; //skip dis - we dont't need nuthin
 		Optional<Player> source = event.getCause().first(Player.class);
@@ -140,5 +99,28 @@ public class CommonEventListener {
 			source.get().sendMessage(Text.of("[Lockette] You may not do this"));
 			event.setCancelled(true);
 		}
+	}
+	
+	@Listener
+	public void onBlockPlace(ChangeBlockEvent.Place event) {
+		Optional<Player> source = event.getCause().first(Player.class);
+		if (!source.isPresent()) return; //no need to block?
+		
+		ExtentDelta.Builder<World> dd=null;
+		for (Transaction<BlockSnapshot> t : event.getTransactions()) {
+			if (dd == null) dd = ExtentDelta.builder(t.getOriginal().getLocation().get().getExtent());
+			dd.addDelta(t.getFinal());
+		}
+		ExtentDelta<World> delta = dd.build();
+		
+		boolean blocked=false;
+		for (Transaction<BlockSnapshot> t : event.getTransactions()) {
+			Vector3i above = t.getOriginal().getPosition().add(0, 1, 0);
+			if (!Lockette.hasAccess(source.get(), delta, above)) {
+				t.setValid(false);
+				blocked=true;
+			}
+		}
+		if (blocked) source.get().sendMessage(Text.of("[Lockette] Some blocks were not placed as they would lock"));
 	}
 }
