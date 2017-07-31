@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.apache.commons.lang3.StringUtils;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.config.DefaultConfig;
 import org.spongepowered.api.entity.living.player.Player;
@@ -32,7 +33,7 @@ import ninja.leaping.configurate.loader.ConfigurationLoader;
 import ninja.leaping.configurate.objectmapping.serialize.TypeSerializerCollection;
 import ninja.leaping.configurate.objectmapping.serialize.TypeSerializers;
 
-@Plugin(id = "dosmike_lockette", name = "Lockette", version = "1.0")
+@Plugin(id = "dosmike_lockette", name = "Lockette", version = "1.1")
 public class Lockette {
 	
 	/** Not doing anything, empty Java main */
@@ -57,8 +58,8 @@ public class Lockette {
 	
 	@Listener
 	public void onServerStart(GameStartedServerEvent event) {
-		log(TextColors.YELLOW, "Wellcome to the zone!");
-		log(TextColors.YELLOW, "Registering commands and loading zones...");
+		PluginContainer self = Sponge.getPluginManager().fromInstance(this).get();
+		log(TextColors.LIGHT_PURPLE, "Version " + self.getVersion().get() + " by " + StringUtils.join(self.getAuthors(), ", "));
 		
 		//add event listener
 		Sponge.getEventManager().registerListeners(this, new CommonEventListener(Sponge.getPluginManager().fromInstance(this).get()));
@@ -66,7 +67,7 @@ public class Lockette {
 		//load containers locked by plugins
 		load();
 		
-		log(TextColors.YELLOW, "We're done loading");
+		log(TextColors.LIGHT_PURPLE, "Thank you for using this plugin!");
 	}
 	
 	
@@ -157,19 +158,19 @@ public class Lockette {
 	public static boolean hasAccess(Player source, Set<Lock> locks) {
 		if (locks.isEmpty()) return true;
 		for (Lock lock : locks) {
-			if (lock.canBypass(source)) {
-				log("Bypassed");
-				return true;
-			}
-			if (!lock.isLocked()) {
-				log("Unlocked");
-				return true;
-			}
-			if (lock.hasAccess(source)) {
-				log("Permitted");
-				return true;
-			}
-//			if (lock.canBypass(source) || !lock.isLocked() || lock.hasAccess(source)) return true;
+//			if (lock.canBypass(source)) {
+//				log("Bypassed");
+//				return true;
+//			}
+//			if (!lock.isLocked()) {
+//				log("Unlocked");
+//				return true;
+//			}
+//			if (lock.hasAccess(source)) {
+//				log("Permitted");
+//				return true;
+//			}
+			if (lock.canBypass(source) || !lock.isLocked() || lock.hasAccess(source)) return true;
 		}
 		return false;
 	}
@@ -193,9 +194,10 @@ public class Lockette {
 	
 	/** save all pluginlocks to file */
 	public static void save() {
-		ConfigurationLoader<CommentedConfigurationNode> loader = ((Lockette)Sponge.getPluginManager().getPlugin("dosmike_lockette").get().getInstance().get()).configManager;
+		ConfigurationLoader<CommentedConfigurationNode> loader = getInstance().configManager;
 		TypeSerializerCollection customSerializer = TypeSerializers.getDefaultSerializers().newChild();
-		customSerializer.registerType(PluginLocksSerializationToken, new LockSerializer());
+		customSerializer.registerType(PluginLocksSerializationToken, new LockMapSerializer());
+		customSerializer.registerType(TypeToken.of(PluginLock.class), new LockSerializer());
 		ConfigurationOptions options = ConfigurationOptions.defaults().setSerializers(customSerializer);
 		ConfigurationNode root = loader.createEmptyNode(options);
 		try {
@@ -209,7 +211,8 @@ public class Lockette {
 	
 	private void load() {
 		TypeSerializerCollection customSerializer = TypeSerializers.getDefaultSerializers().newChild();
-		customSerializer.registerType(PluginLocksSerializationToken, new LockSerializer());
+		customSerializer.registerType(PluginLocksSerializationToken, new LockMapSerializer());
+		customSerializer.registerType(TypeToken.of(PluginLock.class), new LockSerializer());
 		ConfigurationOptions options = ConfigurationOptions.defaults().setSerializers(customSerializer);
 		
 		try {
@@ -220,5 +223,9 @@ public class Lockette {
 			e.printStackTrace();
 			pluginLocks = new HashMap<>();
 		}
+	}
+	
+	static Lockette getInstance() {
+		return (Lockette)Sponge.getPluginManager().getPlugin("dosmike_lockette").get().getInstance().get();
 	}
 }

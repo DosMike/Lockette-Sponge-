@@ -281,7 +281,7 @@ public class LockScanner {
 		return result;
 	}
 
-	boolean isSignLocketteSign(List<Text> data) {
+	static boolean isSignLocketteSign(List<Text> data) {
 		if (data.isEmpty()) return false;
 		Text head = data.get(0);
 		String plain = head.toPlain();

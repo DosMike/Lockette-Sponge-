@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockSnapshot;
+import org.spongepowered.api.block.BlockTypes;
 import org.spongepowered.api.data.Transaction;
 import org.spongepowered.api.entity.explosive.Explosive;
 import org.spongepowered.api.entity.living.player.Player;
@@ -14,6 +15,7 @@ import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.block.ChangeBlockEvent;
 import org.spongepowered.api.event.block.InteractBlockEvent;
 import org.spongepowered.api.event.block.tileentity.ChangeSignEvent;
+import org.spongepowered.api.event.network.ClientConnectionEvent;
 import org.spongepowered.api.event.world.ExplosionEvent;
 import org.spongepowered.api.plugin.PluginContainer;
 import org.spongepowered.api.text.Text;
@@ -31,10 +33,17 @@ public class CommonEventListener {
 		owner=plugin;
 	}
 	
-	//doesn't work at all for signs! (unable to fetch sign data at this point)
-	/*@Listener
-	public void onBlockBreak(ChangeBlockEvent.Break event) {
-	}*/
+	//not reliable for protection
+	@Listener
+	public void onBlockBreak(ChangeBlockEvent event) {
+		if (event instanceof ChangeBlockEvent.Break) {
+			event.getTransactions().forEach(trans -> {
+				if (trans.getOriginal().getState().getType().equals(BlockTypes.WALL_SIGN)) {
+					LockoutWarningManager.clearUndo(trans.getOriginal().getLocation().get());
+				}
+			});
+		}
+	}
 	
 	@Listener
 	public void onExplosion(ExplosionEvent.Detonate event) {
@@ -79,6 +88,7 @@ public class CommonEventListener {
 				}
 				if (empty) lines.set(1, Text.of(source.get().getName()));
 				source.get().sendMessage(Text.of("[Lockette] The lock was successfully added"));
+				LockoutWarningManager.checkLockout(source.get(), event.getTargetTile().getLocation());
 			} else {
 				Lockette.log("[Lockette] Locked by magic!");
 			}
@@ -122,5 +132,10 @@ public class CommonEventListener {
 			}
 		}
 		if (blocked) source.get().sendMessage(Text.of("[Lockette] Some blocks were not placed as they would lock"));
+	}
+	
+	@Listener
+	public void onPlayerDisconnect(ClientConnectionEvent.Disconnect event) {
+		LockoutWarningManager.clearUndo(event.getTargetEntity());
 	}
 }
