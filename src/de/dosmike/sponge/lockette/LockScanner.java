@@ -1,33 +1,32 @@
 package de.dosmike.sponge.lockette;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 
-import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.block.BlockTypes;
 import org.spongepowered.api.block.tileentity.TileEntity;
 import org.spongepowered.api.block.tileentity.carrier.TileEntityCarrier;
 import org.spongepowered.api.data.key.Keys;
-import org.spongepowered.api.data.manipulator.mutable.tileentity.SignData;
 import org.spongepowered.api.data.property.block.MatterProperty;
 import org.spongepowered.api.data.property.block.MatterProperty.Matter;
 import org.spongepowered.api.data.type.Hinge;
 import org.spongepowered.api.data.type.Hinges;
 import org.spongepowered.api.data.type.PortionTypes;
-import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.text.Text;
+import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.util.Direction;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
 import com.flowpowered.math.vector.Vector3i;
 
+import de.dosmike.sponge.lockette.data.LockKeys;
+
 public class LockScanner {
+	static final Text locketteSignIdentifier = Text.of(TextColors.DARK_BLUE, "[Lockette]");
+	
 	ExtentDelta<World> delta;
 	public LockScanner(ExtentDelta<World> delta) {
 		this.delta = delta; 
@@ -98,6 +97,17 @@ public class LockScanner {
 				lockations.add(baseBlock);
 			}
 		} else if (baseState.getType().equals(BlockTypes.WALL_SIGN)) {
+			getSignData(baseBlock).ifPresent(data->{
+				if (!data.isLocketteHolder()) {
+					Lockette.log("No SignData (A) for Sign at " + baseBlock);
+				} else {
+					lockations.add(baseBlock);
+					Optional<Vector3i> maybe = findLockettable(baseBlock);
+					if (maybe.isPresent()) lockations.addAll(getInvolvedBlocks(maybe.get()));
+				}
+			});
+			
+			/*/// Old code
 			Optional<SignData> data = getSignData(baseBlock);
 			if (!data.isPresent()) {
 				Lockette.log("No SignData for Sign at " + baseBlock);
@@ -109,7 +119,7 @@ public class LockScanner {
 					Optional<Vector3i> maybe = findLockettable(baseBlock);
 					if (maybe.isPresent()) lockations.addAll(getInvolvedBlocks(maybe.get()));
 				}
-			}
+			}*/
 		} else if (isBlockContainer(baseBlock)) {//is a container
 			lockations.addAll(scanContainer(baseBlock));
 //				if (pluginLocks.containsKey(baseBlock)) result.add(pluginLocks.get(baseBlock));
@@ -189,6 +199,16 @@ public class LockScanner {
 //				Lockette.log("No sign at " + sign.toString());
 				continue;
 			}
+			
+			Optional<LockDataView> data = getSignData(sign);
+			if (!data.isPresent() || !data.get().isLocketteHolder()) {
+				//Lockette.log("No SignData (B) for Sign at " + sign);
+				continue;
+			}
+			locks.add(data.get().toLock(delta.getExtent().getLocation(sign)));
+			
+			
+			/*/// Old code
 			Optional<SignData> signData = getSignData(sign);
 			if (!signData.isPresent()) {
 				Lockette.log("No SignData for Sign at " + sign);
@@ -206,6 +226,7 @@ public class LockScanner {
 				locks.add(new Lock(delta.getExtent().getLocation(sign), named));
 			} 
 //			else Lockette.log("Sign at " + sign.toString());
+			*/
 		}
 		return locks;
 	}
@@ -281,6 +302,7 @@ public class LockScanner {
 		return result;
 	}
 
+	/*/// Old code
 	static boolean isSignLocketteSign(List<Text> data) {
 		if (data.isEmpty()) return false;
 		Text head = data.get(0);
@@ -291,10 +313,13 @@ public class LockScanner {
 				plain.equals("[Lockette]");
 //		return plain.equals("[Lockette]");
 	}
+	*/
 
 	public boolean trySignIsLockette(Vector3i block) {
 		if (!state(block).getType().equals(BlockTypes.WALL_SIGN)) return false;
-		return isSignLocketteSign(getSignData(block).get().getListValue().get());
+		//return isSignLocketteSign(getSignData(block).get().getListValue().get());
+		Optional<LockDataView> data = getSignData(block);
+		return data.isPresent() && data.get().isLocketteHolder();
 	}
 
 	public Optional<Vector3i> findLockettable(Vector3i sign) {
@@ -327,11 +352,38 @@ public class LockScanner {
 	}
 	/** from a snapshot (= extentdelta) we can't retrieve tileentities. So I have to go back to a Location
 	 * Hacky, not at all dynamic or suitable for spongeforgem but for me that's ok */
+	/*/// Old code
 	Optional<SignData> getSignData(Vector3i at) {
 		Optional<TileEntity> loc = delta.getExtent().getTileEntity(at);
 		if (!loc.isPresent()) return Optional.empty();
 		return loc.get().get(SignData.class);
+	}*/
+	Optional<LockDataView> getSignData(Vector3i at) {
+		Optional<TileEntity> loc = delta.getExtent().getTileEntity(at);
+		if (!loc.isPresent()) return Optional.empty();
+		return loc.get().get(LockKeys.LOCK);
 	}
+	/*
+	void updateSignData(Vector3i at, LockDataView data) {
+		Optional<TileEntity> loc = delta.getExtent().getTileEntity(at);
+		if (!loc.isPresent()) return;
+		try {
+			data.update();
+			loc.get().offer(LockKeys.LOCK, data);
+		} catch(Exception e) {
+			Lockette.log("Failed to update sign data at "+at+": \n"+e);
+		}
+		Optional<SignData> osd = loc.get().get(SignData.class);
+		osd.ifPresent(signData->{
+			List<Text> texts = new ArrayList<>(4);
+			texts.add(locketteSignIdentifier);
+			texts.add(Text.of(data.getOwnerName().orElse("?")));
+			texts.add(Text.of());
+			texts.add(Text.of("[Click to Edit]"));
+			signData.setElements(texts);
+			loc.get().offer(signData);
+		});
+	}*/
 	boolean isBlockLockettable(Vector3i block) {
 		BlockState state = state(block);
 		if (state.supports(Keys.OPEN)) return true;

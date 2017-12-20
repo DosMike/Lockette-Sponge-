@@ -22,6 +22,9 @@ public class PluginLock extends Lock {
 //	@Setting(comment="Additional (plugin) data")
 	Map<String, Serializable> data;
 	
+//	@Setting(comment="individual with elevated rights")
+	UUID owner;
+	
 //	@Setting(comment="List of permitted individuals")
 	List<UUID> permitted;
 	
@@ -69,6 +72,12 @@ public class PluginLock extends Lock {
 	}
 	
 	/* permission manipulation */
+	public void setOwner(Player player) {
+		owner = player.getUniqueId();
+	}
+	public boolean isOwner(Player player) {
+		return (owner!=null && player.getUniqueId().equals(owner));
+	}
 	public void permitAccess(Player player) {
 		if (!permitted.contains(player.getUniqueId()))
 			permitted.add(player.getUniqueId());
@@ -76,12 +85,13 @@ public class PluginLock extends Lock {
 	public void revokeAccess(Player player) {
 		permitted.remove(player.getUniqueId());
 	}
+	
 	/** In order to access the target the source has to have access.<br>
 	 * Access to the target is given if the following statement is true:
 	 * <pre>hasPermission(bypassPermission) || !isLocked() || hasAccess(source)</pre> */
 	@Override 
 	public boolean hasAccess(Player player) {
-		return permitted.contains(player.getUniqueId());
+		return (owner==null || player.getUniqueId().equals(owner)) && permitted.contains(player.getUniqueId());
 	}
 	
 	/* state manipulation */

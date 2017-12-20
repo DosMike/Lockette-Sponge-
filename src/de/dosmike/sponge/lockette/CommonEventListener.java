@@ -1,5 +1,6 @@
 package de.dosmike.sponge.lockette;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
@@ -8,6 +9,8 @@ import java.util.UUID;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockSnapshot;
 import org.spongepowered.api.block.BlockTypes;
+import org.spongepowered.api.block.tileentity.Sign;
+import org.spongepowered.api.data.DataTransactionResult;
 import org.spongepowered.api.data.Transaction;
 import org.spongepowered.api.entity.explosive.Explosive;
 import org.spongepowered.api.entity.living.player.Player;
@@ -19,21 +22,22 @@ import org.spongepowered.api.event.network.ClientConnectionEvent;
 import org.spongepowered.api.event.world.ExplosionEvent;
 import org.spongepowered.api.plugin.PluginContainer;
 import org.spongepowered.api.text.Text;
-import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
 import com.flowpowered.math.vector.Vector3i;
 
+import de.dosmike.sponge.lockette.data.LockKeys;
+
 public class CommonEventListener {
-	static final Text locketteSignIdentifier = Text.of(TextColors.DARK_BLUE, "[Lockette]");
-	
+
 	PluginContainer owner;
+
 	public CommonEventListener(PluginContainer plugin) {
-		owner=plugin;
+		owner = plugin;
 	}
-	
-	//not reliable for protection
+
+	// not reliable for protection
 	@Listener
 	public void onBlockBreak(ChangeBlockEvent event) {
 		if (event instanceof ChangeBlockEvent.Break) {
@@ -44,14 +48,15 @@ public class CommonEventListener {
 			});
 		}
 	}
-	
+
 	@Listener
 	public void onExplosion(ExplosionEvent.Detonate event) {
 		Optional<Player> source = event.getCause().first(Player.class);
 		if (!source.isPresent() && event.getExplosion().getSourceExplosive().isPresent()) {
 			Explosive e = event.getExplosion().getSourceExplosive().get();
 			Optional<UUID> creator = e.getCreator();
-			if (creator.isPresent()) source = Sponge.getServer().getPlayer(creator.get());
+			if (creator.isPresent())
+				source = Sponge.getServer().getPlayer(creator.get());
 		}
 		List<Location<World>> denied = new LinkedList<>();
 		for (Location<World> block : event.getAffectedLocations())
@@ -62,49 +67,93 @@ public class CommonEventListener {
 			source.get().sendMessage(Text.of("[Lockette] There are some blocks you may not blow up"));
 		}
 	}
-	
+
 	@Listener
 	public void onChangeSign(ChangeSignEvent event) {
-		LockScanner scanner = new LockScanner(event.getTargetTile().getWorld()); 
-		Optional<Vector3i> target = 
-				scanner.findLockettable(event.getTargetTile().getLocation().getBlockPosition());
-		if (!target.isPresent()) return;
-		
+		LockScanner scanner = new LockScanner(event.getTargetTile().getWorld());
+		Optional<Vector3i> target = scanner.findLockettable(event.getTargetTile().getLocation().getBlockPosition());
+		if (!target.isPresent())
+			return;
+
 		List<Text> lines = event.getText().getListValue().get();
 		Optional<Player> source = event.getCause().first(Player.class);
 		if (lines.get(0).toPlain().equalsIgnoreCase("[private]")) {
-			//something tries to lock this container
+			// something tries to lock this container
 			if (source.isPresent()) {
-				//a player tries to lock, check privileges
-				if (!Lockette.hasAccess(source.get(), scanner.getExtentDelta(), target.get())) {
-					source.get().sendMessage(Text.of("[Lockette] You are not permitted to add additional locks"));
+				// a player tries to lock, check privileges
+				if (!Lockette.isFullOwner(source.get(), scanner.getExtentDelta(), target.get())) {
+					source.get().sendMessage(Text.of("[Lockette] You are not permitted to edit locks here"));
 					event.setCancelled(true);
 					return;
 				}
-				//write at least the creators name on the sign if empty
-				boolean empty = true;
-				for (int i = 1; i < lines.size(); i++) {
-					if (!lines.get(i).isEmpty()) empty = false;
-				}
-				if (empty) lines.set(1, Text.of(source.get().getName()));
-				source.get().sendMessage(Text.of("[Lockette] The lock was successfully added"));
-				LockoutWarningManager.checkLockout(source.get(), event.getTargetTile().getLocation());
-			} else {
-				Lockette.log("[Lockette] Locked by magic!");
+				// write at least the creators name on the sign if empty
+
+				lines = new ArrayList<>(4);
+				lines.add(0, LockScanner.locketteSignIdentifier);
+				lines.add(Text.of(source.get().getName()));
+				lines.add(Text.of());
+				lines.add(Text.of("[Click to Edit]"));
+
+				event.getText().setElements(lines);
+				LockDataView dataview = new LockDataView();
+				dataview.setOwner(source.get().getProfile());
+				
+				DataTransactionResult result = event.getTargetTile().offer(LockKeys.LOCK, dataview);
+				Lockette.log( result.getType(), "  =>  ", event.getTargetTile().toContainer() );
+				
+				
+				BookViewManager.displayMenuMembersView(source.get(), target.get());
+
+//				Sponge.getScheduler().createSyncExecutor(Lockette.getInstance()).schedule(new Runnable() {					
+//					@Override
+//					public void run() {
+//						LockDataView dataView = new LockDataView(event.getTargetTile().toContainer());
+//						dataView.setOwner(source.get().getProfile());
+//						dataView.update();
+//						dataView.onContainer(
+//						event.getTargetTile().getWorld().getTileEntity(
+//								event.getTargetTile().getLocation().getBlockPosition())
+//							.get().;	
+//						//Lockette.log("Sign NBT: ", dataView.getContainer());
+//						Lockette.log(
+//								event.getTargetTile().getWorld().getTileEntity(
+//										event.getTargetTile().getLocation().getBlockPosition())
+//								.get().toContainer());
+//						
+//					}
+//				}, 1, TimeUnit.MILLISECONDS);
+
+				/*
+				 * /// Old code boolean empty = true; for (int i = 1; i <
+				 * lines.size(); i++) { if (!lines.get(i).isEmpty()) empty =
+				 * false; } if (empty) lines.set(1,
+				 * Text.of(source.get().getName()));
+				 * source.get().sendMessage(Text.
+				 * of("[Lockette] The lock was successfully added"));
+				 * LockoutWarningManager.checkLockout(source.get(),
+				 * event.getTargetTile().getLocation());
+				 */
+			} else { // if the source is no player we ignore it
+				// Lockette.log("[Lockette] Locked by magic!");
 			}
 
-			//if the source is no player we assume something with admin rights is doing this (probably another plugin)
-			lines.set(0, locketteSignIdentifier);
-			event.getText().setElements(lines);
+			/*
+			 * /// Old Code //if the source is no player we assume something
+			 * with admin rights is doing this (probably another plugin)
+			 * lines.set(0, LockScanner.locketteSignIdentifier);
+			 * event.getText().setElements(lines);
+			 */
 		}
 	}
-	
+
 	@Listener
 	public void onInteract(InteractBlockEvent event) {
 		Optional<Location<World>> target = event.getTargetBlock().getLocation();
-		if (!target.isPresent()) return; //skip dis - we dont't need nuthin
+		if (!target.isPresent())
+			return; // skip dis - we dont't need nuthin
 		Optional<Player> source = event.getCause().first(Player.class);
-		if (!source.isPresent()) return; //no need to block?
+		if (!source.isPresent())
+			return; // no need to block?
 		if (!Lockette.hasAccess(source.get(), target.get())) {
 			source.get().sendMessage(Text.of("[Lockette] You may not do this"));
 			event.setCancelled(true);
@@ -112,28 +161,51 @@ public class CommonEventListener {
 	}
 	
 	@Listener
+	public void onInteractSign(InteractBlockEvent.Secondary event) {
+		Optional<Location<World>> target = event.getTargetBlock().getLocation();
+		if (!target.isPresent())
+			return; // skip dis - we dont't need nuthin
+		Optional<Player> source = event.getCause().first(Player.class);
+		if (!source.isPresent())
+			return; // no need to block?
+
+		target.get().getTileEntity().filter(sign->sign instanceof Sign).ifPresent(te->{
+			Sign s = (Sign)te;
+			s.get(LockKeys.LOCK).ifPresent(lock->{
+				if (lock.isLocketteHolder() && source.get().getUniqueId().equals(lock.getOwnerUUID().orElse(null)))
+					BookViewManager.displayMenuOwnerView(source.get(), target.get().getBlockPosition());
+				else
+					BookViewManager.displayMenuMembersView(source.get(), target.get().getBlockPosition());
+			});
+		});
+	}
+
+	@Listener
 	public void onBlockPlace(ChangeBlockEvent.Place event) {
 		Optional<Player> source = event.getCause().first(Player.class);
-		if (!source.isPresent()) return; //no need to block?
-		
-		ExtentDelta.Builder<World> dd=null;
+		if (!source.isPresent())
+			return; // no need to block?
+
+		ExtentDelta.Builder<World> dd = null;
 		for (Transaction<BlockSnapshot> t : event.getTransactions()) {
-			if (dd == null) dd = ExtentDelta.builder(t.getOriginal().getLocation().get().getExtent());
+			if (dd == null)
+				dd = ExtentDelta.builder(t.getOriginal().getLocation().get().getExtent());
 			dd.addDelta(t.getFinal());
 		}
 		ExtentDelta<World> delta = dd.build();
-		
-		boolean blocked=false;
+
+		boolean blocked = false;
 		for (Transaction<BlockSnapshot> t : event.getTransactions()) {
 			Vector3i above = t.getOriginal().getPosition().add(0, 1, 0);
 			if (!Lockette.hasAccess(source.get(), delta, above)) {
 				t.setValid(false);
-				blocked=true;
+				blocked = true;
 			}
 		}
-		if (blocked) source.get().sendMessage(Text.of("[Lockette] Some blocks were not placed as they would lock"));
+		if (blocked)
+			source.get().sendMessage(Text.of("[Lockette] Some blocks were not placed as they would lock"));
 	}
-	
+
 	@Listener
 	public void onPlayerDisconnect(ClientConnectionEvent.Disconnect event) {
 		LockoutWarningManager.clearUndo(event.getTargetEntity());

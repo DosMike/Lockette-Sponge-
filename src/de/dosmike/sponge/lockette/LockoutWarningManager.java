@@ -19,8 +19,11 @@ import org.spongepowered.api.world.World;
 
 import com.google.common.collect.Multimap;
 
+import de.dosmike.sponge.lockette.data.LockKeys;
+
+//delete?
 public class LockoutWarningManager {
-	
+
 	static final String profileKey = "dosmike_lockette";
 	static final String profileUndoLocation = "undo_location";
 	static final String profileUndoTime = "undo_time";
@@ -52,6 +55,33 @@ public class LockoutWarningManager {
 				return;
 			}
 			Sign sign = (Sign)maybeSign.get();
+			LockDataView signdata = new LockDataView(sign.toContainer());
+			if (signdata.isLocketteHolder()) {
+				List<Text> actions = new LinkedList<>();
+				actions.add(Text.builder("UNDO").color(TextColors.RED)
+					.onClick(TextActions.executeCallback(cs -> {
+						if (!(cs instanceof Player)) return;
+						Player player = (Player)cs;
+						callbackUndo(player);
+					}))
+					.onHover(TextActions.showText(Text.of("Makes this a normal sign")))
+					.build());
+				actions.add(Text.builder("ADD ME").color(TextColors.GREEN)
+						.onClick(TextActions.executeCallback(cs -> {
+							if (!(cs instanceof Player)) return;
+							Player player = (Player)cs;
+							callbackAdd(player);
+						}))
+						.onHover(TextActions.showText(Text.of("Add your name to the list")))
+						.build());
+				Text.Builder builder = Text.builder();
+				for (Text act : actions) {
+					builder.append(Text.of(" [", act, "] "));
+				}
+				source.sendMessage(Text.of("If this was an accident you have these options:"));
+				source.sendMessage(builder.build());
+			}
+			/*/// Old code
 			List<Text> signdata = sign.getSignData().getListValue().get();
 			if (LockScanner.isSignLocketteSign(signdata)) {
 				List<Text> actions = new LinkedList<>();
@@ -91,7 +121,7 @@ public class LockoutWarningManager {
 				}
 				source.sendMessage(Text.of("If this was an accident you have these options:"));
 				source.sendMessage(builder.build());
-			}
+			} */
 		} catch (Exception e) {
 			source.sendMessage(Text.of("Sadly I can not provide UNDO for this action"));
 			e.printStackTrace();
@@ -108,12 +138,14 @@ public class LockoutWarningManager {
 		Location<World> at = LockSerializer.str2loc(getProperty(pp, profileUndoLocation).get().getValue());
 		Sign sign = (Sign)at.getTileEntity().get();
 		
+		sign.remove(LockKeys.LOCK);
+		
 		SignData data = sign.getSignData();
 		data.setElement(0, Text.of());
 		sign.offer(data);
 		player.sendMessage(Text.of("[Lockette] Your action was undone"));
 		clearUndo(player);
-	}
+	}/*
 	static void callbackReplace(Player player, Text other) {
 		Collection<ProfileProperty> pp = player.getProfile().getPropertyMap().get(profileKey);
 		Optional<ProfileProperty> when = getProperty(pp, profileUndoTime);
@@ -129,7 +161,7 @@ public class LockoutWarningManager {
 		sign.offer(data);
 		player.sendMessage(Text.of("[Lockette] Your replaced ", other, " on the lock"));
 		clearUndo(player);
-	}
+	}*/
 	static void callbackAdd(Player player) {
 		Collection<ProfileProperty> pp = player.getProfile().getPropertyMap().get(profileKey);
 		Optional<ProfileProperty> when = getProperty(pp, profileUndoTime);
@@ -140,10 +172,14 @@ public class LockoutWarningManager {
 		Location<World> at = LockSerializer.str2loc(getProperty(pp, profileUndoLocation).get().getValue());
 		Sign sign = (Sign)at.getTileEntity().get();
 		
-		SignData data = sign.getSignData();
-		data.setElement(data.getListValue().indexOf(Text.of()), Text.of(player.getName()));
-		sign.offer(data);
-		player.sendMessage(Text.of("[Lockette] Your name was added to the lock"));
+		sign.get(LockKeys.LOCK).ifPresent(ldata->{
+			ldata.permit(player.getProfile());
+			sign.offer(LockKeys.LOCK, ldata);
+			SignData data = sign.getSignData();
+			data.setElement(data.getListValue().indexOf(Text.of()), Text.of(player.getName()));
+			sign.offer(data);
+			player.sendMessage(Text.of("[Lockette] Your name was added to the lock"));
+		});
 		clearUndo(player);
 	}
 	
