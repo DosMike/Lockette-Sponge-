@@ -14,7 +14,7 @@ public class Lock {
 	Location<World> target; //this value is reflected in the parents lock map
 	
 	Lock() {}
-	Lock(Location<World> target, UUID owner, List<UUID> permitted) {
+	public Lock(Location<World> target, UUID owner, List<UUID> permitted) {
 		this.owner = owner;
 		this.permitted = permitted;
 		this.target = target;

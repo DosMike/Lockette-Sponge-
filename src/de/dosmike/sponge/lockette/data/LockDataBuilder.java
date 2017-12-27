@@ -23,12 +23,16 @@ public class LockDataBuilder extends AbstractDataBuilder<LockData> implements Da
 
 	@Override
 	public Optional<LockData> createFrom(DataHolder dataHolder) {
-		return create().fill(dataHolder);
+		Optional<LockData> old = create().fill(dataHolder);
+//		Logger.getAnonymousLogger().info("createFrom isPresen? "+old.isPresent());
+		return old;
 	}
 
 	@Override
 	protected Optional<LockData> buildContent(DataView container) throws InvalidDataException {
-		return create().from(container);
+		Optional<LockData> old = create().from(container);
+//		Logger.getAnonymousLogger().info("buildContent isPresen? "+old.isPresent());
+		return old;
 	}
 	
 	

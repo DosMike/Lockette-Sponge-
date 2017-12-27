@@ -19,7 +19,7 @@ import org.spongepowered.api.world.World;
 
 import com.google.common.collect.Multimap;
 
-import de.dosmike.sponge.lockette.data.LockKeys;
+import de.dosmike.sponge.lockette.data.LockData;
 
 //delete?
 public class LockoutWarningManager {
@@ -55,7 +55,7 @@ public class LockoutWarningManager {
 				return;
 			}
 			Sign sign = (Sign)maybeSign.get();
-			LockDataView signdata = new LockDataView(sign.toContainer());
+			LockData signdata = new LockData(sign.toContainer());
 			if (signdata.isLocketteHolder()) {
 				List<Text> actions = new LinkedList<>();
 				actions.add(Text.builder("UNDO").color(TextColors.RED)
@@ -138,7 +138,7 @@ public class LockoutWarningManager {
 		Location<World> at = LockSerializer.str2loc(getProperty(pp, profileUndoLocation).get().getValue());
 		Sign sign = (Sign)at.getTileEntity().get();
 		
-		sign.remove(LockKeys.LOCK);
+		Lockette.removeLockKey(sign);
 		
 		SignData data = sign.getSignData();
 		data.setElement(0, Text.of());
@@ -172,9 +172,9 @@ public class LockoutWarningManager {
 		Location<World> at = LockSerializer.str2loc(getProperty(pp, profileUndoLocation).get().getValue());
 		Sign sign = (Sign)at.getTileEntity().get();
 		
-		sign.get(LockKeys.LOCK).ifPresent(ldata->{
+		Lockette.getLockKey(sign).ifPresent(ldata->{
 			ldata.permit(player.getProfile());
-			sign.offer(LockKeys.LOCK, ldata);
+			sign.offer(/*LockKeys.LOCK,*/ ldata);
 			SignData data = sign.getSignData();
 			data.setElement(data.getListValue().indexOf(Text.of()), Text.of(player.getName()));
 			sign.offer(data);

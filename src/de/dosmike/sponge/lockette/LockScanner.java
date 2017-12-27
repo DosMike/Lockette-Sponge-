@@ -22,7 +22,7 @@ import org.spongepowered.api.world.World;
 
 import com.flowpowered.math.vector.Vector3i;
 
-import de.dosmike.sponge.lockette.data.LockKeys;
+import de.dosmike.sponge.lockette.data.LockData;
 
 public class LockScanner {
 	static final Text locketteSignIdentifier = Text.of(TextColors.DARK_BLUE, "[Lockette]");
@@ -200,7 +200,7 @@ public class LockScanner {
 				continue;
 			}
 			
-			Optional<LockDataView> data = getSignData(sign);
+			Optional<LockData> data = getSignData(sign);
 			if (!data.isPresent() || !data.get().isLocketteHolder()) {
 				//Lockette.log("No SignData (B) for Sign at " + sign);
 				continue;
@@ -318,7 +318,7 @@ public class LockScanner {
 	public boolean trySignIsLockette(Vector3i block) {
 		if (!state(block).getType().equals(BlockTypes.WALL_SIGN)) return false;
 		//return isSignLocketteSign(getSignData(block).get().getListValue().get());
-		Optional<LockDataView> data = getSignData(block);
+		Optional<LockData> data = getSignData(block);
 		return data.isPresent() && data.get().isLocketteHolder();
 	}
 
@@ -358,10 +358,10 @@ public class LockScanner {
 		if (!loc.isPresent()) return Optional.empty();
 		return loc.get().get(SignData.class);
 	}*/
-	Optional<LockDataView> getSignData(Vector3i at) {
+	Optional<LockData> getSignData(Vector3i at) {
 		Optional<TileEntity> loc = delta.getExtent().getTileEntity(at);
 		if (!loc.isPresent()) return Optional.empty();
-		return loc.get().get(LockKeys.LOCK);
+		return Lockette.getLockKey(loc.get());
 	}
 	/*
 	void updateSignData(Vector3i at, LockDataView data) {

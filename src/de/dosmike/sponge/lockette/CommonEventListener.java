@@ -10,7 +10,6 @@ import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockSnapshot;
 import org.spongepowered.api.block.BlockTypes;
 import org.spongepowered.api.block.tileentity.Sign;
-import org.spongepowered.api.data.DataTransactionResult;
 import org.spongepowered.api.data.Transaction;
 import org.spongepowered.api.entity.explosive.Explosive;
 import org.spongepowered.api.entity.living.player.Player;
@@ -27,7 +26,7 @@ import org.spongepowered.api.world.World;
 
 import com.flowpowered.math.vector.Vector3i;
 
-import de.dosmike.sponge.lockette.data.LockKeys;
+import de.dosmike.sponge.lockette.data.LockData;
 
 public class CommonEventListener {
 
@@ -95,34 +94,11 @@ public class CommonEventListener {
 				lines.add(Text.of("[Click to Edit]"));
 
 				event.getText().setElements(lines);
-				LockDataView dataview = new LockDataView();
-				dataview.setOwner(source.get().getProfile());
+				LockData lockdata = new LockData();
+				lockdata.setOwner(source.get().getProfile());
 				
-				DataTransactionResult result = event.getTargetTile().offer(LockKeys.LOCK, dataview);
-				Lockette.log( result.getType(), "  =>  ", event.getTargetTile().toContainer() );
+				event.getTargetTile().offer(lockdata);
 				
-				
-				BookViewManager.displayMenuMembersView(source.get(), target.get());
-
-//				Sponge.getScheduler().createSyncExecutor(Lockette.getInstance()).schedule(new Runnable() {					
-//					@Override
-//					public void run() {
-//						LockDataView dataView = new LockDataView(event.getTargetTile().toContainer());
-//						dataView.setOwner(source.get().getProfile());
-//						dataView.update();
-//						dataView.onContainer(
-//						event.getTargetTile().getWorld().getTileEntity(
-//								event.getTargetTile().getLocation().getBlockPosition())
-//							.get().;	
-//						//Lockette.log("Sign NBT: ", dataView.getContainer());
-//						Lockette.log(
-//								event.getTargetTile().getWorld().getTileEntity(
-//										event.getTargetTile().getLocation().getBlockPosition())
-//								.get().toContainer());
-//						
-//					}
-//				}, 1, TimeUnit.MILLISECONDS);
-
 				/*
 				 * /// Old code boolean empty = true; for (int i = 1; i <
 				 * lines.size(); i++) { if (!lines.get(i).isEmpty()) empty =
@@ -170,9 +146,14 @@ public class CommonEventListener {
 			return; // no need to block?
 
 		target.get().getTileEntity().filter(sign->sign instanceof Sign).ifPresent(te->{
-			Sign s = (Sign)te;
-			s.get(LockKeys.LOCK).ifPresent(lock->{
-				if (lock.isLocketteHolder() && source.get().getUniqueId().equals(lock.getOwnerUUID().orElse(null)))
+//			Sign s = (Sign)te;
+//			if (!te.toContainer().contains(LockKeys.LOCK)) {
+//				throw new RuntimeException("Lock data are not supported!");
+//			}
+			
+//			Optional<LockData> ls = Lockette.getLock(te);//new LockDataBuilder().build(te.toContainer());
+			Lockette.getLockKey(te).ifPresent(lock->{
+				if (lock.isLocketteHolder() && source.get().getUniqueId().equals(lock.getLockOwnerID().get().orElse(null)))
 					BookViewManager.displayMenuOwnerView(source.get(), target.get().getBlockPosition());
 				else
 					BookViewManager.displayMenuMembersView(source.get(), target.get().getBlockPosition());

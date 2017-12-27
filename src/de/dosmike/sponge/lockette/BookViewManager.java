@@ -24,8 +24,6 @@ import org.spongepowered.api.text.format.TextColors;
 
 import com.flowpowered.math.vector.Vector3i;
 
-import de.dosmike.sponge.lockette.data.LockKeys;
-
 //"        [Lockette]"
 //(19-Namelen-"Owner: "-len /2-1(good measure)*' ')"Owner: "+Name
 //"   [Unlock]   [Permit]"
@@ -62,7 +60,7 @@ public class BookViewManager {
 			allLocks.remove(thisLock);
 			
 			Text page = Text.of(TextColors.BLUE, "        [Lockette]", Text.NEW_LINE,
-					space((16-lockData.getOwnerName().orElse("?").length())/2-1), TextColors.RESET, "Owner: ", lockData.getOwnerName().orElse("?"), Text.NEW_LINE); 
+					space((16-lockData.getLockOwnerName().get().orElse("?").length())/2-1), TextColors.RESET, "Owner: ", lockData.getLockOwnerName().get().orElse("?"), Text.NEW_LINE); 
 			
 			int n=10;
 			for (UUID entry : thisLock.permitted) {
@@ -84,6 +82,10 @@ public class BookViewManager {
 						n=14;
 					}
 				}
+			//add the rest
+			if (!page.isEmpty()) {
+				pages.add(page);
+			}
 		});
 		BookView b = BookView.builder().author(LockScanner.locketteSignIdentifier)
 				.title(LockScanner.locketteSignIdentifier)
@@ -102,26 +104,26 @@ public class BookViewManager {
 			allLocks.remove(thisLock);
 			
 			Text page = Text.of(TextColors.BLUE, "        [Lockette]", Text.NEW_LINE,
-					space((16-lockData.getOwnerName().orElse("?").length())/2-1), TextColors.RESET, "Owner: ", lockData.getOwnerName().orElse("?"), Text.NEW_LINE); 
-			page = Text.of(page, space(3), "[", TextColors.RED, Text.builder("Unlock")
+					space((16-lockData.getLockOwnerName().get().orElse("?").length())/2-1), TextColors.RESET, "Owner: ", lockData.getLockOwnerName().get().orElse("?"), Text.NEW_LINE); 
+			page = Text.of(page, space(3), "[", Text.builder("Unlock").color(TextColors.DARK_RED)
 					.onClick(TextActions.executeCallback(new LockCallback(thisLock) {
 						@Override
 						public void accept(CommandSource t) {
 							if (t instanceof Player) breakLock((Player)t, getTarget());
 						}
-					})).build(), "]   [", TextColors.RED, Text.builder("Permit")
+					})).build(), TextColors.BLACK, "]   [", Text.builder("Permit").color(TextColors.DARK_GREEN)
 					.onClick(TextActions.executeCallback(new LockCallback(thisLock) {
 						@Override
 						public void accept(CommandSource t) {
-							if (t instanceof Player) breakLock((Player)t, getTarget());
+							if (t instanceof Player) displayMenuOwnerPermit((Player)t, getTarget().getTarget().getBlockPosition());
 						}
-					})).build()
+					})).build(), TextColors.BLACK, "]"
 					);
 			
 			int n=5;
 			for (UUID entry : thisLock.permitted) {
 				page = Text.of(page, (page.isEmpty()?Text.EMPTY:Text.NEW_LINE), TextColors.RESET, playerDecor(entry), Text.NEW_LINE,
-						"  ", Text.builder("[-]").color(TextColors.RED).onHover(TextActions.showText(Text.of("Remove Acces")))
+						"  ", Text.builder("[-]").color(TextColors.DARK_RED).onHover(TextActions.showText(Text.of("Remove Acces")))
 								.onClick(TextActions.executeCallback(new LockCallback(thisLock, entry) {
 									@Override
 									public void accept(CommandSource t) {
@@ -129,7 +131,7 @@ public class BookViewManager {
 									}
 								})).build(),
 								" ",
-								Text.builder("[-]").color(TextColors.RED).onHover(TextActions.showText(Text.of("Transfer Ownership")))
+								Text.builder("[>]").color(TextColors.DARK_GREEN).onHover(TextActions.showText(Text.of("Transfer Ownership")))
 								.onClick(TextActions.executeCallback(new LockCallback(thisLock, entry) {
 									@Override
 									public void accept(CommandSource t) {
@@ -155,6 +157,10 @@ public class BookViewManager {
 						n=14;
 					}
 				}
+			//add the rest
+			if (!page.isEmpty()) {
+				pages.add(page);
+			}
 		});
 		BookView b = BookView.builder().author(LockScanner.locketteSignIdentifier)
 				.title(LockScanner.locketteSignIdentifier)
@@ -170,10 +176,9 @@ public class BookViewManager {
 			if (!lockData.isLocketteHolder()) return;
 			Set<Lock> allLocks = ls.getLocksFor(lockSign);
 			Lock thisLock = lockData.toLock(viewer.getWorld().getLocation(lockSign));
-			allLocks.remove(thisLock);
 			
 			Text page = Text.of(TextColors.BLUE, "        [Lockette]", Text.NEW_LINE,
-					space(3), TextColors.RESET, "   Add user to Lock", Text.NEW_LINE); 
+					space(3), TextColors.RESET, "Add user to Lock", Text.NEW_LINE); 
 			
 			
 			int n=10;
@@ -196,16 +201,10 @@ public class BookViewManager {
 					n=14;
 				}
 			}
-			for (Lock lock : allLocks)
-				for (UUID entry : lock.permitted) {
-					page = Text.of(page, (page.isEmpty()?Text.EMPTY:Text.NEW_LINE), TextColors.DARK_GRAY, playerDecor(entry));
-					
-					if (n==0) {
-						pages.add(page);
-						page = Text.EMPTY;
-						n=14;
-					}
-				}
+			//add the rest
+			if (!page.isEmpty()) {
+				pages.add(page);
+			}
 		});
 		BookView b = BookView.builder().author(LockScanner.locketteSignIdentifier)
 				.title(LockScanner.locketteSignIdentifier)
@@ -250,8 +249,8 @@ public class BookViewManager {
 		if (lock.isOwner(player)) {
 			lock.getTarget().getTileEntity().ifPresent(ent -> {
 				if (ent instanceof Sign) {
-					ent.get(LockKeys.LOCK).ifPresent(data->{
-						ent.remove(LockKeys.LOCK);
+					Lockette.getLockKey(ent).ifPresent(data->{
+						Lockette.removeLockKey(ent);
 						
 						SignData sd = ((Sign)ent).getSignData();
 						sd.setElement(0, Text.of());
@@ -267,19 +266,19 @@ public class BookViewManager {
 		if (lock.isOwner(player)) {
 			lock.getTarget().getTileEntity().ifPresent(ent -> {
 				if (ent instanceof Sign) {
-					ent.get(LockKeys.LOCK).ifPresent(data->{
+					Lockette.getLockKey(ent).ifPresent(data->{
 						Lockette.getUser(other).ifPresent(newOwner->{
 							data.deny(newOwner.getProfile());
 							data.setOwner(newOwner.getProfile());
 							data.permit(player.getProfile());
 							data.update();
-							ent.offer(LockKeys.LOCK, data);
+							ent.offer(/*LockKeys.LOCK,*/ data);
 							
 							SignData sd = ((Sign)ent).getSignData();
-							sd.setElement(1, Text.of(data.getOwnerName().orElse("?")));
+							sd.setElement(1, Text.of(data.getLockOwnerName().get().orElse("?")));
 							ent.offer(sd);
 							
-							player.sendMessage(Text.of("[Lockette] Ownership was transfered to ", playerDecor(data.getOwnerUUID().get())));
+							player.sendMessage(Text.of("[Lockette] Ownership was transfered to ", playerDecor(data.getLockOwnerID().get().get())));
 							displayMenuMembersView(player, lock.getTarget().getBlockPosition());
 						});
 					});
@@ -291,16 +290,16 @@ public class BookViewManager {
 		if (lock.isOwner(player)) {
 			lock.getTarget().getTileEntity().ifPresent(ent -> {
 				if (ent instanceof Sign) {
-					ent.get(LockKeys.LOCK).ifPresent(data->{
-						Lockette.getUser(other).ifPresent(newOwner->{
-							if (data.getPermitted().containsKey(other)) {
+					Lockette.getLockKey(ent).ifPresent(data->{
+						Lockette.getUser(other).ifPresent(permitMe->{
+							if (data.isPermitted(other)) {
 								player.sendMessage(Text.of("[Lockette] The player ", playerDecor(other), " already has access to this"));
 							} else {
-								data.permit(player.getProfile());
+								data.permit(permitMe.getProfile());
 								data.update();
-								ent.offer(LockKeys.LOCK, data);
+								ent.offer(/*LockKeys.LOCK,*/ data);
 								
-								player.sendMessage(Text.of("[Lockette] Access to this was granted for ", playerDecor(other)));
+								player.sendMessage(Text.of("[Lockette] Access to this was granted for ", playerDecor(permitMe)));
 								displayMenuOwnerPermit(player, lock.getTarget().getBlockPosition());
 							}
 						});
@@ -314,16 +313,16 @@ public class BookViewManager {
 		if (lock.isOwner(player)) {
 			lock.getTarget().getTileEntity().ifPresent(ent -> {
 				if (ent instanceof Sign) {
-					ent.get(LockKeys.LOCK).ifPresent(data->{
-						Lockette.getUser(other).ifPresent(newOwner->{
-							if (!data.getPermitted().containsKey(other)) {
+					Lockette.getLockKey(ent).ifPresent(data->{
+						Lockette.getUser(other).ifPresent(blockMe->{
+							if (!data.isPermitted(other)) {
 								player.sendMessage(Text.of("[Lockette] The player ", playerDecor(other), " has no access to this"));
 							} else {
-								data.deny(player.getProfile());
+								data.deny(blockMe.getProfile());
 								data.update();
-								ent.offer(LockKeys.LOCK, data);
+								ent.offer(/*LockKeys.LOCK,*/ data);
 								
-								player.sendMessage(Text.of("[Lockette] Access to this has been revoked for ", playerDecor(other)));
+								player.sendMessage(Text.of("[Lockette] Access to this has been revoked for ", playerDecor(blockMe)));
 								displayMenuOwnerView(player, lock.getTarget().getBlockPosition());
 							}
 						});						

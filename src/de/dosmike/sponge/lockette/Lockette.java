@@ -2,6 +2,7 @@ package de.dosmike.sponge.lockette;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -9,8 +10,15 @@ import java.util.UUID;
 
 import org.apache.commons.lang3.StringUtils;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.block.BlockTypes;
+import org.spongepowered.api.block.tileentity.TileEntity;
+import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.spec.CommandSpec;
 import org.spongepowered.api.config.DefaultConfig;
+import org.spongepowered.api.data.DataQuery;
 import org.spongepowered.api.data.DataRegistration;
+import org.spongepowered.api.data.DataView;
+import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.event.Listener;
@@ -24,6 +32,7 @@ import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColor;
 import org.spongepowered.api.text.format.TextColors;
+import org.spongepowered.api.util.Direction;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
@@ -34,6 +43,8 @@ import com.google.inject.Inject;
 import de.dosmike.sponge.lockette.data.ImmutableLockData;
 import de.dosmike.sponge.lockette.data.LockData;
 import de.dosmike.sponge.lockette.data.LockDataBuilder;
+import de.dosmike.sponge.lockette.data.LockDataQueries;
+import de.dosmike.sponge.lockette.data.LockKeys;
 import ninja.leaping.configurate.ConfigurationNode;
 import ninja.leaping.configurate.ConfigurationOptions;
 import ninja.leaping.configurate.commented.CommentedConfigurationNode;
@@ -75,13 +86,25 @@ public class Lockette {
 	
 	@Listener
 	public void onPreInit(GamePreInitializationEvent event) {
-		DataRegistration.builder()
+//		DataRegistration<LockData, ImmutableLockData> dr = DataRegistration.builder()
+//			.dataClass(LockData.class)
+//			.immutableClass(ImmutableLockData.class)
+//			.builder(new LockDataBuilder())
+//			.manipulatorId("lockdata")
+//			.dataName("Lock Data")
+//			.buildAndRegister(Sponge.getPluginManager().fromInstance(this).get());
+//		Sponge.getDataManager().registerLegacyManipulatorIds("lockdata", dr);
+		DataRegistration<LockData, ImmutableLockData> dr = DataRegistration.builder()
 			.dataClass(LockData.class)
 			.immutableClass(ImmutableLockData.class)
 			.builder(new LockDataBuilder())
 			.manipulatorId("lockdata")
 			.dataName("Lock Data")
 			.buildAndRegister(Sponge.getPluginManager().fromInstance(this).get());
+		
+		Sponge.getDataManager().registerLegacyManipulatorIds("dosmike_lockette:lockdata", dr);
+		
+		Sponge.getDataManager().registerBuilder(LockData.class, new LockDataBuilder());
 	}
 	
 	@Listener
@@ -95,6 +118,29 @@ public class Lockette {
 		
 		//load containers locked by plugins
 		load();
+		
+		Sponge.getCommandManager().register(this, CommandSpec.builder()
+				.executor((src, args)->{
+					if (src instanceof Player) {
+						Player p = ((Player) src);
+						LockData ld = new LockData();
+						ld.setOwner(p.getProfile());
+						p.sendMessage(Text.of("Created "+ld.toContainer()));
+						
+						p.offer(/*LockKeys.LOCK,*/ ld);
+						p.get(LockKeys.LOCK).ifPresent(l->p.sendMessage(Text.of("Set key to player")));
+						
+						Lockette.log("State: " + p.toContainer());
+						
+						p.sendMessage(Text.of("Player supports LockKey? ", p.supports(LockKeys.LOCK)));
+						
+						p.remove(LockKeys.LOCK);
+						p.get(LockKeys.LOCK).ifPresent(l->p.sendMessage(Text.of("Was unable to remove Key")));
+					}
+					
+					return CommandResult.success();
+				})
+				.build(), "lockette");
 		
 		log(TextColors.LIGHT_PURPLE, "Thank you for using this plugin!");
 	}
@@ -269,4 +315,38 @@ public class Lockette {
 	static Lockette getInstance() {
 		return (Lockette)Sponge.getPluginManager().getPlugin("dosmike_lockette").get().getInstance().get();
 	}
+	
+	
+	//=== = = = The following two functions are Unsafe NBT helpers, as Sponge does not correctly mirror the custom NBTs into the safe space as of Dec '17 = = = ===
+
+	public static Optional<LockData> getLockKey(TileEntity te) {
+		Optional<LockData> old = te.get(LockKeys.LOCK);
+		if (old.isPresent()) return old;
+		
+		Optional<List<DataView>> oviews = te.toContainer().getViewList(LockDataQueries.UNSAFE_LOCATION);
+		if (!oviews.isPresent()) return Optional.empty();
+		List<DataView> views = oviews.get();
+		for (DataView view : views) {
+			Optional<String> oid = view.getString(DataQuery.of("ManipulatorId"));
+			if (!oid.isPresent()) continue;
+			String id = oid.get();
+			if (!id.equals("dosmike_lockette:lockdata")) continue;
+			Optional<DataView> omdata = view.getView(DataQuery.of("ManipulatorData"));
+			if (omdata.isPresent())
+				return Optional.of(new LockData(omdata.get()));
+		}
+		return Optional.empty();
+	}
+	public static void removeLockKey(TileEntity te) {
+		//removing doesn't seem to work event through container manipulation/setraw, so I just create a new sign...
+		
+		Direction d = te.getBlock().get(Keys.DIRECTION).get();
+		Location<World> at = te.getLocation();
+		
+		at.removeBlock();
+		at.setBlockType(BlockTypes.WALL_SIGN);
+		at.tryOffer(Keys.DIRECTION, d);
+	}
+	
+	
 }
