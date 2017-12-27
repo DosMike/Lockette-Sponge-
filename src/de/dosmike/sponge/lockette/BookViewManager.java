@@ -11,6 +11,7 @@ import java.util.function.Consumer;
 
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.tileentity.Sign;
+import org.spongepowered.api.block.tileentity.TileEntity;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.data.manipulator.mutable.tileentity.SignData;
@@ -263,26 +264,27 @@ public class BookViewManager {
 		}
 	}
 	public static void transferLock(Player player, Lock lock, UUID other) {
-		if (lock.isOwner(player)) {
-			lock.getTarget().getTileEntity().ifPresent(ent -> {
-				if (ent instanceof Sign) {
+		LockScanner scanner = new LockScanner(lock.getTarget().getExtent());
+		Optional<Vector3i> protectedBlock = scanner.findLockettable(lock.getTarget().getBlockPosition());
+		if (protectedBlock.isPresent()) {
+			Lockette.getUser(other).ifPresent(newOwner->{
+				scanner.getLocksFor(protectedBlock.get()).forEach(attached->{
+					TileEntity ent = attached.getTarget().getTileEntity().get();
 					Lockette.getLockKey(ent).ifPresent(data->{
-						Lockette.getUser(other).ifPresent(newOwner->{
-							data.deny(newOwner.getProfile());
-							data.setOwner(newOwner.getProfile());
-							data.permit(player.getProfile());
-							data.update();
-							ent.offer(/*LockKeys.LOCK,*/ data);
-							
-							SignData sd = ((Sign)ent).getSignData();
-							sd.setElement(1, Text.of(data.getLockOwnerName().get().orElse("?")));
-							ent.offer(sd);
-							
-							player.sendMessage(Text.of("[Lockette] Ownership was transfered to ", playerDecor(data.getLockOwnerID().get().get())));
-							displayMenuMembersView(player, lock.getTarget().getBlockPosition());
-						});
+						data.deny(newOwner.getProfile());
+						data.setOwner(newOwner.getProfile());
+						data.permit(player.getProfile());
+						data.update();
+						ent.offer(/*LockKeys.LOCK,*/ data);
+						
+						SignData sd = ((Sign)ent).getSignData();
+						sd.setElement(1, Text.of(data.getLockOwnerName().get().orElse("?")));
+						ent.offer(sd);
+						
+						player.sendMessage(Text.of("[Lockette] Ownership was transfered to ", playerDecor(data.getLockOwnerID().get().get())));
 					});
-				}
+					displayMenuMembersView(player, lock.getTarget().getBlockPosition());
+				});
 			});
 		}
 	}

@@ -52,7 +52,7 @@ import ninja.leaping.configurate.loader.ConfigurationLoader;
 import ninja.leaping.configurate.objectmapping.serialize.TypeSerializerCollection;
 import ninja.leaping.configurate.objectmapping.serialize.TypeSerializers;
 
-@Plugin(id = "dosmike_lockette", name = "Lockette", version = "1.1")
+@Plugin(id = "dosmike_lockette", name = "Lockette", version = "1.2")
 public class Lockette {
 		
 	/** Not doing anything, empty Java main */
