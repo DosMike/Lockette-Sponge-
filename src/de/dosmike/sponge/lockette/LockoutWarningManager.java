@@ -30,7 +30,7 @@ public class LockoutWarningManager {
 	
 	static void checkLockout(Player source, Location<World> target) {
 		Sponge.getScheduler().createTaskBuilder().delayTicks(1).execute(()->{
-			if (!Lockette.hasAccess(source, target)) {
+			if (!Lockette.hasAccess(source.getUniqueId(), target)) {
 				Multimap<String, ProfileProperty> pp = source.getProfile().getPropertyMap();
 				pp.removeAll(profileKey);
 				pp.put(profileKey, ProfileProperty.of(profileUndoLocation, LockSerializer.loc2str(target)));
@@ -81,47 +81,6 @@ public class LockoutWarningManager {
 				source.sendMessage(Text.of("If this was an accident you have these options:"));
 				source.sendMessage(builder.build());
 			}
-			/*/// Old code
-			List<Text> signdata = sign.getSignData().getListValue().get();
-			if (LockScanner.isSignLocketteSign(signdata)) {
-				List<Text> actions = new LinkedList<>();
-				actions.add(Text.builder("UNDO").color(TextColors.RED)
-					.onClick(TextActions.executeCallback(cs -> {
-						if (!(cs instanceof Player)) return;
-						Player player = (Player)cs;
-						callbackUndo(player);
-					}))
-					.onHover(TextActions.showText(Text.of("Makes this a normal sign")))
-					.build());
-				boolean freespace=signdata.size()<4, skip=true;
-				for (Text owner : signdata) {
-					if (owner.isEmpty()) { freespace=true; continue; }
-					if (skip) { skip=!skip; continue; } //skip line 0
-					actions.add(Text.builder(owner.toPlain()).color(TextColors.YELLOW)
-						.onClick(TextActions.executeCallback(cs -> {
-							if (!(cs instanceof Player)) return;
-							Player player = (Player)cs;
-							callbackReplace(player, owner);
-						}))
-						.onHover(TextActions.showText(Text.of("Replace this name with your own")))
-						.build());
-				}
-				if (freespace) actions.add(Text.builder("ADD ME").color(TextColors.GREEN)
-						.onClick(TextActions.executeCallback(cs -> {
-							if (!(cs instanceof Player)) return;
-							Player player = (Player)cs;
-							callbackAdd(player);
-						}))
-						.onHover(TextActions.showText(Text.of("Add your name to the list")))
-						.build());
-				
-				Text.Builder builder = Text.builder();
-				for (Text act : actions) {
-					builder.append(Text.of(" [", act, "] "));
-				}
-				source.sendMessage(Text.of("If this was an accident you have these options:"));
-				source.sendMessage(builder.build());
-			} */
 		} catch (Exception e) {
 			source.sendMessage(Text.of("Sadly I can not provide UNDO for this action"));
 			e.printStackTrace();
@@ -138,30 +97,14 @@ public class LockoutWarningManager {
 		Location<World> at = LockSerializer.str2loc(getProperty(pp, profileUndoLocation).get().getValue());
 		Sign sign = (Sign)at.getTileEntity().get();
 		
-		Lockette.removeLockKey(sign);
+		DataWrapper.removeLockKey(sign);
 		
 		SignData data = sign.getSignData();
 		data.setElement(0, Text.of());
 		sign.offer(data);
 		player.sendMessage(Text.of("[Lockette] Your action was undone"));
 		clearUndo(player);
-	}/*
-	static void callbackReplace(Player player, Text other) {
-		Collection<ProfileProperty> pp = player.getProfile().getPropertyMap().get(profileKey);
-		Optional<ProfileProperty> when = getProperty(pp, profileUndoTime);
-		if (!when.isPresent() || System.currentTimeMillis() - Long.parseLong(when.get().getValue()) > 60000) {
-			player.sendMessage(Text.of("[Lockette] Sorry, this UNDO expired"));
-			return;
-		}
-		Location<World> at = LockSerializer.str2loc(getProperty(pp, profileUndoLocation).get().getValue());
-		Sign sign = (Sign)at.getTileEntity().get();
-		
-		SignData data = sign.getSignData();
-		data.setElement(sign.getSignData().getListValue().indexOf(other), Text.of(player.getName()));
-		sign.offer(data);
-		player.sendMessage(Text.of("[Lockette] Your replaced ", other, " on the lock"));
-		clearUndo(player);
-	}*/
+	}
 	static void callbackAdd(Player player) {
 		Collection<ProfileProperty> pp = player.getProfile().getPropertyMap().get(profileKey);
 		Optional<ProfileProperty> when = getProperty(pp, profileUndoTime);
@@ -172,7 +115,7 @@ public class LockoutWarningManager {
 		Location<World> at = LockSerializer.str2loc(getProperty(pp, profileUndoLocation).get().getValue());
 		Sign sign = (Sign)at.getTileEntity().get();
 		
-		Lockette.getLockKey(sign).ifPresent(ldata->{
+		DataWrapper.getLockKey(sign).ifPresent(ldata->{
 			ldata.permit(player.getProfile());
 			sign.offer(/*LockKeys.LOCK,*/ ldata);
 			SignData data = sign.getSignData();

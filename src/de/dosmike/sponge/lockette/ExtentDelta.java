@@ -20,19 +20,15 @@ public class ExtentDelta<E extends Extent> {
 	
 	public BlockSnapshot get(Location<E> location) {
 		if (delta.containsKey(location.getBlockPosition())) {
-//			Lockette.log("ExtentDelta delta");
 			return delta.get(location.getBlockPosition());
 		} else {
-//			Lockette.log("ExtentDelta live");
 			return ex.createSnapshot(location.getBlockPosition());
 		}
 	}
 	public BlockSnapshot get(Vector3i location) {
 		if (delta.containsKey(location)) {
-//			Lockette.log("ExtentDelta get " + location + " [S]");
 			return delta.get(location);
 		} else {
-//			Lockette.log("ExtentDelta get " + location + " [L]");
 			return ex.createSnapshot(location);
 		}
 	}
@@ -49,7 +45,6 @@ public class ExtentDelta<E extends Extent> {
 			built = new ExtentDelta<X>(forExtent);
 		}
 		public void addDelta(BlockSnapshot delta) {
-//			Lockette.log("ExtentDelta put at " + delta.getPosition());
 			built.delta.put(delta.getPosition(), delta);
 		}
 		public void addDeltas(Collection<BlockSnapshot> deltas) {

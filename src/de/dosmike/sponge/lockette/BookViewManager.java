@@ -184,7 +184,7 @@ public class BookViewManager {
 			
 			int n=10;
 			for (Player oplayer : Sponge.getServer().getOnlinePlayers()) {
-				page = Text.of(page, (page.isEmpty()?Text.EMPTY:Text.NEW_LINE), (thisLock.permitted.contains(oplayer.getUniqueId()) || Lockette.hasAccess(oplayer, allLocks))
+				page = Text.of(page, (page.isEmpty()?Text.EMPTY:Text.NEW_LINE), (thisLock.permitted.contains(oplayer.getUniqueId()) || Lockette.hasAccess(oplayer.getUniqueId(), allLocks))
 						? Text.of(TextColors.DARK_GRAY, "[ ] ", playerDecor(oplayer))
 						: Text.of(Text.builder("[+]").color(TextColors.DARK_GREEN).onHover(TextActions.showText(Text.of("Grant Acces")))
 							.onClick(TextActions.executeCallback(new LockCallback(thisLock, oplayer.getUniqueId()) {
@@ -247,11 +247,11 @@ public class BookViewManager {
 	}
 	
 	public static void breakLock(Player player, Lock lock) {
-		if (lock.isOwner(player)) {
+		if (lock.isOwner(player.getUniqueId())) {
 			lock.getTarget().getTileEntity().ifPresent(ent -> {
 				if (ent instanceof Sign) {
-					Lockette.getLockKey(ent).ifPresent(data->{
-						Lockette.removeLockKey(ent);
+					DataWrapper.getLockKey(ent).ifPresent(data->{
+						DataWrapper.removeLockKey(ent);
 						
 						SignData sd = ((Sign)ent).getSignData();
 						sd.setElement(0, Text.of());
@@ -270,7 +270,7 @@ public class BookViewManager {
 			Lockette.getUser(other).ifPresent(newOwner->{
 				scanner.getLocksFor(protectedBlock.get()).forEach(attached->{
 					TileEntity ent = attached.getTarget().getTileEntity().get();
-					Lockette.getLockKey(ent).ifPresent(data->{
+					DataWrapper.getLockKey(ent).ifPresent(data->{
 						data.deny(newOwner.getProfile());
 						data.setOwner(newOwner.getProfile());
 						data.permit(player.getProfile());
@@ -289,10 +289,10 @@ public class BookViewManager {
 		}
 	}
 	public static void allowUserLock(Player player, Lock lock, UUID other) {
-		if (lock.isOwner(player)) {
+		if (lock.isOwner(player.getUniqueId())) {
 			lock.getTarget().getTileEntity().ifPresent(ent -> {
 				if (ent instanceof Sign) {
-					Lockette.getLockKey(ent).ifPresent(data->{
+					DataWrapper.getLockKey(ent).ifPresent(data->{
 						Lockette.getUser(other).ifPresent(permitMe->{
 							if (data.isPermitted(other)) {
 								player.sendMessage(Text.of("[Lockette] The player ", playerDecor(other), " already has access to this"));
@@ -312,10 +312,10 @@ public class BookViewManager {
 		}
 	}
 	public static void denyUserLock(Player player, Lock lock, UUID other) {
-		if (lock.isOwner(player)) {
+		if (lock.isOwner(player.getUniqueId())) {
 			lock.getTarget().getTileEntity().ifPresent(ent -> {
 				if (ent instanceof Sign) {
-					Lockette.getLockKey(ent).ifPresent(data->{
+					DataWrapper.getLockKey(ent).ifPresent(data->{
 						Lockette.getUser(other).ifPresent(blockMe->{
 							if (!data.isPermitted(other)) {
 								player.sendMessage(Text.of("[Lockette] The player ", playerDecor(other), " has no access to this"));

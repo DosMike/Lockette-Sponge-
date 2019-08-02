@@ -2,7 +2,6 @@ package de.dosmike.sponge.lockette;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -10,15 +9,10 @@ import java.util.UUID;
 
 import org.apache.commons.lang3.StringUtils;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.block.BlockTypes;
-import org.spongepowered.api.block.tileentity.TileEntity;
 import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.spec.CommandSpec;
 import org.spongepowered.api.config.DefaultConfig;
-import org.spongepowered.api.data.DataQuery;
-import org.spongepowered.api.data.DataRegistration;
-import org.spongepowered.api.data.DataView;
-import org.spongepowered.api.data.key.Keys;
+import org.spongepowered.api.data.key.Key;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.event.Listener;
@@ -32,7 +26,6 @@ import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColor;
 import org.spongepowered.api.text.format.TextColors;
-import org.spongepowered.api.util.Direction;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
@@ -40,10 +33,7 @@ import com.flowpowered.math.vector.Vector3i;
 import com.google.common.reflect.TypeToken;
 import com.google.inject.Inject;
 
-import de.dosmike.sponge.lockette.data.ImmutableLockData;
 import de.dosmike.sponge.lockette.data.LockData;
-import de.dosmike.sponge.lockette.data.LockDataBuilder;
-import de.dosmike.sponge.lockette.data.LockDataQueries;
 import de.dosmike.sponge.lockette.data.LockKeys;
 import ninja.leaping.configurate.ConfigurationNode;
 import ninja.leaping.configurate.ConfigurationOptions;
@@ -78,33 +68,15 @@ public class Lockette {
 	Optional<UserStorageService> userStorage;
 	public static Optional<User> getUser(UUID by) {
 		 Optional<Player> onlinePlayer = Sponge.getServer().getPlayer(by);
-	    if (onlinePlayer.isPresent()) {
-	        return Optional.of((User)onlinePlayer.get());
-	    }
-	    return getInstance().userStorage.get().get(by);
+		return onlinePlayer
+				.map(player -> Optional.of((User) player))
+				.orElseGet(() -> getInstance().userStorage.get().get(by));
 	}
 	
 	@Listener
 	public void onPreInit(GamePreInitializationEvent event) {
-//		DataRegistration<LockData, ImmutableLockData> dr = DataRegistration.builder()
-//			.dataClass(LockData.class)
-//			.immutableClass(ImmutableLockData.class)
-//			.builder(new LockDataBuilder())
-//			.manipulatorId("lockdata")
-//			.dataName("Lock Data")
-//			.buildAndRegister(Sponge.getPluginManager().fromInstance(this).get());
-//		Sponge.getDataManager().registerLegacyManipulatorIds("lockdata", dr);
-		DataRegistration<LockData, ImmutableLockData> dr = DataRegistration.builder()
-			.dataClass(LockData.class)
-			.immutableClass(ImmutableLockData.class)
-			.builder(new LockDataBuilder())
-			.manipulatorId("lockdata")
-			.dataName("Lock Data")
-			.buildAndRegister(Sponge.getPluginManager().fromInstance(this).get());
-		
-		Sponge.getDataManager().registerLegacyManipulatorIds("dosmike_lockette:lockdata", dr);
-		
-		Sponge.getDataManager().registerBuilder(LockData.class, new LockDataBuilder());
+		Key<?> key = LockKeys.LOCK; //force load the class
+		DataWrapper.registerKeys();
 	}
 	
 	@Listener
@@ -112,6 +84,8 @@ public class Lockette {
 		PluginContainer self = Sponge.getPluginManager().fromInstance(this).get();
 		userStorage = Sponge.getServiceManager().provide(UserStorageService.class);
 		log(TextColors.LIGHT_PURPLE, "Version " + self.getVersion().get() + " by " + StringUtils.join(self.getAuthors(), ", "));
+
+		log(TextColors.LIGHT_PURPLE, "Sponge API MAJOR: ", TextColors.WHITE, DataWrapper.SPONGE_API_MAJOR);
 		
 		//add event listener
 		Sponge.getEventManager().registerListeners(this, new CommonEventListener(Sponge.getPluginManager().fromInstance(this).get()));
@@ -219,42 +193,27 @@ public class Lockette {
 		return true;
 	}
 	
-	public static boolean hasAccess(Player source, ExtentDelta<World> delta, Location<World> target) {
-//		if (!target.getExtent().equals(delta.getExtent())) throw new IllegalArgumentException("Target not in delta extent");
+	public static boolean hasAccess(UUID source, ExtentDelta<World> delta, Location<World> target) {
 		return hasAccess(source, new LockScanner(delta).getLocksFor(target.getBlockPosition()));
 	}
-	public static boolean hasAccess(Player source, ExtentDelta<World> delta, Vector3i target) {
-//		if (!target.getExtent().equals(delta.getExtent())) throw new IllegalArgumentException("Target not in delta extent");
+	public static boolean hasAccess(UUID source, ExtentDelta<World> delta, Vector3i target) {
 		return hasAccess(source, new LockScanner(delta).getLocksFor(target));
 	}
-	public static boolean hasAccess(Player source, Location<World> target) {
+	public static boolean hasAccess(UUID source, Location<World> target) {
 		return hasAccess(source, new LockScanner(target.getExtent()).getLocksFor(target.getBlockPosition()));
 	}
-	public static boolean hasAccess(Player source, Set<Lock> locks) {
+	public static boolean hasAccess(UUID source, Set<Lock> locks) {
 		if (locks.isEmpty()) return true;
 		for (Lock lock : locks) {
-//			if (lock.canBypass(source)) {
-//				log("Bypassed");
-//				return true;
-//			}
-//			if (!lock.isLocked()) {
-//				log("Unlocked");
-//				return true;
-//			}
-//			if (lock.hasAccess(source)) {
-//				log("Permitted");
-//				return true;
-//			}
 			if (lock.canBypass(source) || !lock.isLocked() || lock.hasAccess(source)) return true;
 		}
 		return false;
 	}
 	
-	public static boolean isFullOwner(Player source, ExtentDelta<World> delta, Vector3i target) {
-//		if (!target.getExtent().equals(delta.getExtent())) throw new IllegalArgumentException("Target not in delta extent");
+	public static boolean isFullOwner(UUID source, ExtentDelta<World> delta, Vector3i target) {
 		return isFullOwner(source, new LockScanner(delta).getLocksFor(target));
 	}
-	public static boolean isFullOwner(Player source, Set<Lock> locks) {
+	public static boolean isFullOwner(UUID source, Set<Lock> locks) {
 		if (locks.isEmpty()) return true;
 		for (Lock lock : locks)
 			if (!lock.isOwner(source)) return false;
@@ -315,38 +274,5 @@ public class Lockette {
 	static Lockette getInstance() {
 		return (Lockette)Sponge.getPluginManager().getPlugin("dosmike_lockette").get().getInstance().get();
 	}
-	
-	
-	//=== = = = The following two functions are Unsafe NBT helpers, as Sponge does not correctly mirror the custom NBTs into the safe space as of Dec '17 = = = ===
 
-	public static Optional<LockData> getLockKey(TileEntity te) {
-		Optional<LockData> old = te.get(LockKeys.LOCK);
-		if (old.isPresent()) return old;
-		
-		Optional<List<DataView>> oviews = te.toContainer().getViewList(LockDataQueries.UNSAFE_LOCATION);
-		if (!oviews.isPresent()) return Optional.empty();
-		List<DataView> views = oviews.get();
-		for (DataView view : views) {
-			Optional<String> oid = view.getString(DataQuery.of("ManipulatorId"));
-			if (!oid.isPresent()) continue;
-			String id = oid.get();
-			if (!id.equals("dosmike_lockette:lockdata")) continue;
-			Optional<DataView> omdata = view.getView(DataQuery.of("ManipulatorData"));
-			if (omdata.isPresent())
-				return Optional.of(new LockData(omdata.get()));
-		}
-		return Optional.empty();
-	}
-	public static void removeLockKey(TileEntity te) {
-		//removing doesn't seem to work event through container manipulation/setraw, so I just create a new sign...
-		
-		Direction d = te.getBlock().get(Keys.DIRECTION).get();
-		Location<World> at = te.getLocation();
-		
-		at.removeBlock();
-		at.setBlockType(BlockTypes.WALL_SIGN);
-		at.tryOffer(Keys.DIRECTION, d);
-	}
-	
-	
 }

@@ -5,6 +5,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockSnapshot;
@@ -21,6 +22,7 @@ import org.spongepowered.api.event.network.ClientConnectionEvent;
 import org.spongepowered.api.event.world.ExplosionEvent;
 import org.spongepowered.api.plugin.PluginContainer;
 import org.spongepowered.api.text.Text;
+import org.spongepowered.api.util.Identifiable;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
@@ -46,16 +48,41 @@ public class CommonEventListener {
 				}
 			});
 		}
+		if ((event instanceof ChangeBlockEvent.Modify) || (event instanceof ChangeBlockEvent.Break)) {
+			Optional<Player> source = event.getCause().first(Player.class);
+			if (source.isPresent()) {
+				boolean allow = true;
+				for (Transaction<BlockSnapshot> t : event.getTransactions()) {
+					if (!Lockette.hasAccess(source.get().getUniqueId(), t.getOriginal().getLocation().get()))
+						allow = false;
+				}
+				if (!allow) {
+					event.getTransactions().forEach(t->t.setValid(false));
+					event.setCancelled(true);
+					source.get().sendMessage(Text.of("[Lockette] You may not do this"));
+				}
+			} else { //no player source could be found, so if a lock is involved cancel everything
+				boolean allow = true;
+				for (Transaction<BlockSnapshot> t : event.getTransactions()) {
+					if (new LockScanner(t.getOriginal().getLocation().get().getExtent())
+							.getLocksFor(t.getOriginal().getPosition()).size()>0) {
+						allow = false;
+					}
+				}
+				if (!allow) {
+					event.getTransactions().forEach(t->t.setValid(false));
+					event.setCancelled(true);
+				}
+			}
+		}
 	}
 
 	@Listener
 	public void onExplosion(ExplosionEvent.Detonate event) {
-		Optional<Player> source = event.getCause().first(Player.class);
+		Optional<UUID> source = event.getCause().first(Player.class).map(Identifiable::getUniqueId);
 		if (!source.isPresent() && event.getExplosion().getSourceExplosive().isPresent()) {
 			Explosive e = event.getExplosion().getSourceExplosive().get();
-			Optional<UUID> creator = e.getCreator();
-			if (creator.isPresent())
-				source = Sponge.getServer().getPlayer(creator.get());
+			source = e.getCreator();
 		}
 		List<Location<World>> denied = new LinkedList<>();
 		for (Location<World> block : event.getAffectedLocations())
@@ -63,7 +90,9 @@ public class CommonEventListener {
 				denied.add(block);
 		event.getAffectedLocations().removeAll(denied);
 		if (!denied.isEmpty()) {
-			source.get().sendMessage(Text.of("[Lockette] There are some blocks you may not blow up"));
+			Sponge.getServer().getPlayer(source.get()).ifPresent(
+					player-> player.sendMessage(Text.of("[Lockette] There are some blocks you may not blow up"))
+			);
 		}
 	}
 
@@ -80,7 +109,7 @@ public class CommonEventListener {
 			// something tries to lock this container
 			if (source.isPresent()) {
 				// a player tries to lock, check privileges
-				if (!Lockette.isFullOwner(source.get(), scanner.getExtentDelta(), target.get())) {
+				if (!Lockette.isFullOwner(source.get().getUniqueId(), scanner.getExtentDelta(), target.get())) {
 					source.get().sendMessage(Text.of("[Lockette] You are not permitted to edit locks here"));
 					event.setCancelled(true);
 					return;
@@ -98,27 +127,7 @@ public class CommonEventListener {
 				lockdata.setOwner(source.get().getProfile());
 				
 				event.getTargetTile().offer(lockdata);
-				
-				/*
-				 * /// Old code boolean empty = true; for (int i = 1; i <
-				 * lines.size(); i++) { if (!lines.get(i).isEmpty()) empty =
-				 * false; } if (empty) lines.set(1,
-				 * Text.of(source.get().getName()));
-				 * source.get().sendMessage(Text.
-				 * of("[Lockette] The lock was successfully added"));
-				 * LockoutWarningManager.checkLockout(source.get(),
-				 * event.getTargetTile().getLocation());
-				 */
-			} else { // if the source is no player we ignore it
-				// Lockette.log("[Lockette] Locked by magic!");
 			}
-
-			/*
-			 * /// Old Code //if the source is no player we assume something
-			 * with admin rights is doing this (probably another plugin)
-			 * lines.set(0, LockScanner.locketteSignIdentifier);
-			 * event.getText().setElements(lines);
-			 */
 		}
 	}
 
@@ -130,7 +139,7 @@ public class CommonEventListener {
 		Optional<Player> source = event.getCause().first(Player.class);
 		if (!source.isPresent())
 			return; // no need to block?
-		if (!Lockette.hasAccess(source.get(), target.get())) {
+		if (!Lockette.hasAccess(source.get().getUniqueId(), target.get())) {
 			source.get().sendMessage(Text.of("[Lockette] You may not do this"));
 			event.setCancelled(true);
 		}
@@ -146,13 +155,7 @@ public class CommonEventListener {
 			return; // no need to block?
 
 		target.get().getTileEntity().filter(sign->sign instanceof Sign).ifPresent(te->{
-//			Sign s = (Sign)te;
-//			if (!te.toContainer().contains(LockKeys.LOCK)) {
-//				throw new RuntimeException("Lock data are not supported!");
-//			}
-			
-//			Optional<LockData> ls = Lockette.getLock(te);//new LockDataBuilder().build(te.toContainer());
-			Lockette.getLockKey(te).ifPresent(lock->{
+			DataWrapper.getLockKey(te).ifPresent(lock->{
 				if (lock.isLocketteHolder() && source.get().getUniqueId().equals(lock.getLockOwnerID().get().orElse(null)))
 					BookViewManager.displayMenuOwnerView(source.get(), target.get().getBlockPosition());
 				else
@@ -178,7 +181,7 @@ public class CommonEventListener {
 		boolean blocked = false;
 		for (Transaction<BlockSnapshot> t : event.getTransactions()) {
 			Vector3i above = t.getOriginal().getPosition().add(0, 1, 0);
-			if (!Lockette.hasAccess(source.get(), delta, above)) {
+			if (!Lockette.hasAccess(source.get().getUniqueId(), delta, above)) {
 				t.setValid(false);
 				blocked = true;
 			}

@@ -37,9 +37,8 @@ public class ImmutableLockData extends AbstractImmutableData<ImmutableLockData, 
 		
 		pnames = container.getStringList(LockDataQueries.PERM_NAMES).orElse(new LinkedList<>());
 		List<String> uuids = container.getStringList(LockDataQueries.PERM_UUIDS).orElse(new LinkedList<>());
-		puuids = uuids.stream().map((uid)->UUID.fromString(uid)).collect(Collectors.toList());
+		puuids = uuids.stream().map(UUID::fromString).collect(Collectors.toList());
 		
-//		Logger.getAnonymousLogger().info("Immutable const... "+toContainer());
 		registerGetters();
 	}
 	
@@ -66,7 +65,7 @@ public class ImmutableLockData extends AbstractImmutableData<ImmutableLockData, 
 			.set(LockDataQueries.OWNER_UUID, ouuid.get())
 			.set(LockDataQueries.PERM_NAMES, pnames)
 			.set(LockDataQueries.PERM_UUIDS, puuids.stream()
-					.map((uid)->uid.toString())
+					.map(UUID::toString)
 					.collect(Collectors.toList()));
 	}
 	

@@ -122,7 +122,6 @@ public class LockData extends AbstractData<LockData, ImmutableLockData> {
 	
 	public Optional<LockData> from(DataView view) {
 		if (!view.contains(LockKeys.LOCK.getQuery())) {
-//			throw new RuntimeException("Not Lock");
 			return Optional.empty();
 		}
 		
@@ -133,7 +132,7 @@ public class LockData extends AbstractData<LockData, ImmutableLockData> {
 		
 		pnames = view.getStringList(LockDataQueries.PERM_NAMES).orElse(new LinkedList<>());
 		List<String> uuids = view.getStringList(LockDataQueries.PERM_UUIDS).orElse(new LinkedList<>());
-		puuids = uuids.stream().map((uid)->UUID.fromString(uid)).collect(Collectors.toList());
+		puuids = uuids.stream().map(UUID::fromString).collect(Collectors.toList());
 		
 		return Optional.of(this);
 	}
@@ -148,7 +147,7 @@ public class LockData extends AbstractData<LockData, ImmutableLockData> {
 			.set(LockDataQueries.OWNER_UUID, ouuid.get())
 			.set(LockDataQueries.PERM_NAMES, pnames)
 			.set(LockDataQueries.PERM_UUIDS, puuids.stream()
-					.map((uid)->uid.toString())
+					.map(UUID::toString)
 					.collect(Collectors.toList()));
 	}
 	

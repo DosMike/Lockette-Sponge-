@@ -90,8 +90,8 @@ public class PluginLock extends Lock {
 	 * Access to the target is given if the following statement is true:
 	 * <pre>hasPermission(bypassPermission) || !isLocked() || hasAccess(source)</pre> */
 	@Override 
-	public boolean hasAccess(Player player) {
-		return (owner==null || player.getUniqueId().equals(owner)) && permitted.contains(player.getUniqueId());
+	public boolean hasAccess(UUID player) {
+		return (owner==null || player.equals(owner)) && permitted.contains(player);
 	}
 	
 	/* state manipulation */
@@ -116,7 +116,9 @@ public class PluginLock extends Lock {
 	}
 	
 	@Override
-	boolean canBypass(Player player) {
-		return player.hasPermission(permission==null?"dosmike.lockette.check.if.user.is.op":permission);
+	boolean canBypass(UUID player) {
+		return Lockette.getInstance().userStorage.get().get(player)
+				.map(u->u.hasPermission(permission==null?"dosmike.lockette.check.if.user.is.op":permission))
+				.orElse(false);
 	}
 }

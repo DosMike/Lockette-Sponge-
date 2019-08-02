@@ -1,0 +1,13 @@
+[{
+    "modid": "dosmike_lockette",
+    "name": "Lockette",
+    "version": "1.2",
+    "description": "Allows you to lock doors and containers with a sign or other plugins",
+    "authorList": [
+        "DosMike"
+    ],
+    "useDependencyInformation": "true",
+    "dependencies": [
+        "spongeapi@7.0.0"
+    ]
+}]

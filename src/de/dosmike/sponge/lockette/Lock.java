@@ -20,15 +20,15 @@ public class Lock {
 		this.target = target;
 	}
 	
-	public boolean isOwner(Player player) {
-		return owner.equals(player.getUniqueId());
+	public boolean isOwner(UUID player) {
+		return owner.equals(player);
 	}
 	
 	/** In order to access the target the source has to have access.<br>
 	 * Access to the target is given if the following statement is true:
 	 * <pre>hasPermission(bypassPermission) || !isLocked() || hasAccess(source)</pre> */
-	public boolean hasAccess(Player player) {
-		return owner.equals(player.getUniqueId())||permitted.contains(player.getUniqueId());
+	public boolean hasAccess(UUID player) {
+		return owner.equals(player)||permitted.contains(player);
 	}
 	
 	/** If the lock is unlocked anyone will be able to access the target<br>
@@ -39,8 +39,8 @@ public class Lock {
 		return true;
 	}
 	
-	boolean canBypass(Player player) {
-		return player.hasPermission("dosmike.lockette.check.if.user.is.op");
+	boolean canBypass(UUID player) {
+		return Lockette.getInstance().userStorage.get().get(player).map(u->u.hasPermission("dosmike.lockette.check.if.user.is.op")).orElse(false);
 	}
 	
 	public Location<World> getTarget() {
