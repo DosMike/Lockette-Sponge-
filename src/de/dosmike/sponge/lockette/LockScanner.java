@@ -1,33 +1,32 @@
 package de.dosmike.sponge.lockette;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 
-import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.block.BlockTypes;
 import org.spongepowered.api.block.tileentity.TileEntity;
 import org.spongepowered.api.block.tileentity.carrier.TileEntityCarrier;
 import org.spongepowered.api.data.key.Keys;
-import org.spongepowered.api.data.manipulator.mutable.tileentity.SignData;
 import org.spongepowered.api.data.property.block.MatterProperty;
 import org.spongepowered.api.data.property.block.MatterProperty.Matter;
 import org.spongepowered.api.data.type.Hinge;
 import org.spongepowered.api.data.type.Hinges;
 import org.spongepowered.api.data.type.PortionTypes;
-import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.text.Text;
+import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.util.Direction;
 import org.spongepowered.api.world.Location;
 import org.spongepowered.api.world.World;
 
 import com.flowpowered.math.vector.Vector3i;
 
+import de.dosmike.sponge.lockette.data.LockData;
+
 public class LockScanner {
+	static final Text locketteSignIdentifier = Text.of(TextColors.DARK_BLUE, "[Lockette]");
+	
 	ExtentDelta<World> delta;
 	public LockScanner(ExtentDelta<World> delta) {
 		this.delta = delta; 
@@ -54,15 +53,12 @@ public class LockScanner {
 			//see if we have a "big" door
 			if (baseState.supports(Keys.HINGE_POSITION) &&
 					baseState.supports(Keys.PORTION_TYPE)) {
-//				log("Full Door");
 				lockations.addAll(scanDoor(baseBlock));
 				//door location / possible plugin lock
 				if (baseState.get(Keys.PORTION_TYPE).orElse(PortionTypes.TOP).equals(PortionTypes.BOTTOM)) {
 					lockations.add(baseBlock.add(0,1,0)); 
-					//if (pluginLocks.containsKey(baseBlock.getRelative(Direction.UP))) result.add(pluginLocks.get(baseBlock.getRelative(Direction.UP)));
 				} else {
 					lockations.add(baseBlock);
-//					if (pluginLocks.containsKey(baseBlock)) result.add(pluginLocks.get(baseBlock));
 				}
 				
 				//scan for a second door half (double doors)
@@ -85,34 +81,28 @@ public class LockScanner {
 						lockations.addAll(scanDoor(partner));
 						if (partnerState.get(Keys.PORTION_TYPE).orElse(PortionTypes.TOP).equals(PortionTypes.BOTTOM)) {
 							lockations.add(partner.add(0,1,0));
-//							if (pluginLocks.containsKey(baseBlock.getRelative(Direction.UP))) result.add(pluginLocks.get(baseBlock.getRelative(Direction.UP)));
 						} else {
 							lockations.add(partner);
-//							if (pluginLocks.containsKey(baseBlock)) result.add(pluginLocks.get(baseBlock));
 						}
 					}
 				}
-			} else { 
-//				log("Door");
+			} else {
 				lockations.addAll(scanContainer(baseBlock));
 				lockations.add(baseBlock);
 			}
 		} else if (baseState.getType().equals(BlockTypes.WALL_SIGN)) {
-			Optional<SignData> data = getSignData(baseBlock);
-			if (!data.isPresent()) {
-				Lockette.log("No SignData for Sign at " + baseBlock);
-			} else {
-				if (isSignLocketteSign(data.get().getListValue().get())) {
-					//get the data for the block we are attached to
-	//					lockations=getInvolvedBlocks(baseBlock.getRelative(baseBlock.getBlock().get(Keys.DIRECTION).get().getOpposite()));
-					lockations.add(baseBlock); // if by event, still has original snapshot data?
+			getSignData(baseBlock).ifPresent(data->{
+				if (!data.isLocketteHolder()) {
+					Lockette.log("No SignData (A) for Sign at " + baseBlock);
+				} else {
+					lockations.add(baseBlock);
 					Optional<Vector3i> maybe = findLockettable(baseBlock);
 					if (maybe.isPresent()) lockations.addAll(getInvolvedBlocks(maybe.get()));
 				}
-			}
+			});
+
 		} else if (isBlockContainer(baseBlock)) {//is a container
 			lockations.addAll(scanContainer(baseBlock));
-//				if (pluginLocks.containsKey(baseBlock)) result.add(pluginLocks.get(baseBlock));
 			lockations.add(baseBlock);
 			//find double chests
 			if (baseState.getType().equals(BlockTypes.CHEST) || 
@@ -125,7 +115,6 @@ public class LockScanner {
 						relState.get(Keys.DIRECTION).get().equals(dir)) {
 						lockations.addAll(scanContainer(rel));
 						lockations.add(rel);
-//							if (pluginLocks.containsKey(rel)) result.add(pluginLocks.get(rel));
 					} else {
 						rel = baseBlock.add(Direction.WEST.asBlockOffset());
 						relState = state(rel);
@@ -133,7 +122,6 @@ public class LockScanner {
 							relState.get(Keys.DIRECTION).get().equals(dir)) {
 							lockations.addAll(scanContainer(rel));
 							lockations.add(rel);
-//								if (pluginLocks.containsKey(rel)) result.add(pluginLocks.get(rel));
 						}
 					}
 				} else if (dir.equals(Direction.EAST) || dir.equals(Direction.WEST)) {
@@ -143,7 +131,6 @@ public class LockScanner {
 						relState.get(Keys.DIRECTION).get().equals(dir)) {
 						lockations.addAll(scanContainer(rel));
 						lockations.add(rel);
-//							if (pluginLocks.containsKey(rel)) result.add(pluginLocks.get(rel));
 					} else {
 						rel = baseBlock.add(Direction.SOUTH.asBlockOffset());
 						relState = state(rel);
@@ -151,7 +138,6 @@ public class LockScanner {
 							relState.get(Keys.DIRECTION).get().equals(dir)) {
 							lockations.addAll(scanContainer(rel));
 							lockations.add(rel);
-//								if (pluginLocks.containsKey(rel)) result.add(pluginLocks.get(rel));
 						}
 					}
 				}
@@ -170,11 +156,9 @@ public class LockScanner {
 			Set<Lock> result; // = new HashSet<>();
 			Set<Vector3i> involved = getInvolvedBlocks(baseBlock);
 			
-	//		log(involved.size() + " potential locks");
 			//ok, now we should have a whole bunch of sign locations, let's get to work
 			result = signsToLocks(involved);
-//			Lockette.log("Found ", result.size(), " locks");
-			
+
 			return result;
 		}
 	
@@ -186,26 +170,14 @@ public class LockScanner {
 				Location<World> at = getExtent().getLocation(sign);
 				if (Lockette.pluginLocks.containsKey(at)) 
 					locks.add(Lockette.pluginLocks.get(at));
-//				Lockette.log("No sign at " + sign.toString());
 				continue;
 			}
-			Optional<SignData> signData = getSignData(sign);
-			if (!signData.isPresent()) {
-				Lockette.log("No SignData for Sign at " + sign);
+			
+			Optional<LockData> data = getSignData(sign);
+			if (!data.isPresent() || !data.get().isLocketteHolder()) {
 				continue;
 			}
-			List<Text> data = signData.get().lines().get();
-			if (isSignLocketteSign(data)) {
-//				Lockette.log("Lockette at " + sign.toString());
-				List<UUID> named = new ArrayList<>();
-				for (int i = 1; i < data.size(); i++) {
-					Optional<Player> player = Sponge.getServer().getPlayer(data.get(i).toPlain());
-					if (player.isPresent() && !named.contains(player.get().getUniqueId())) 
-						named.add(player.get().getUniqueId());
-				}
-				locks.add(new Lock(delta.getExtent().getLocation(sign), named));
-			} 
-//			else Lockette.log("Sign at " + sign.toString());
+			locks.add(data.get().toLock(delta.getExtent().getLocation(sign)));
 		}
 		return locks;
 	}
@@ -263,8 +235,7 @@ public class LockScanner {
 		Vector3i rel = block.add(dir.asBlockOffset());
 		BlockState relState = state(rel);
 		if (relState.getType().equals(BlockTypes.WALL_SIGN) && relState.get(Keys.DIRECTION).get().equals(dir)) {
-//			log("Found sign " + dir);
-			result.add(rel); 
+			result.add(rel);
 		} else if (extended) {
 			//check if the block is solid and not container...
 			Optional<MatterProperty> p = relState.getType().getProperty(MatterProperty.class);
@@ -281,20 +252,10 @@ public class LockScanner {
 		return result;
 	}
 
-	static boolean isSignLocketteSign(List<Text> data) {
-		if (data.isEmpty()) return false;
-		Text head = data.get(0);
-		String plain = head.toPlain();
-		
-//		Lockette.log(plain, " vs [Lockette]");
-		return !head.equals(Text.of(plain)) && //line has format
-				plain.equals("[Lockette]");
-//		return plain.equals("[Lockette]");
-	}
-
 	public boolean trySignIsLockette(Vector3i block) {
 		if (!state(block).getType().equals(BlockTypes.WALL_SIGN)) return false;
-		return isSignLocketteSign(getSignData(block).get().getListValue().get());
+		Optional<LockData> data = getSignData(block);
+		return data.isPresent() && data.get().isLocketteHolder();
 	}
 
 	public Optional<Vector3i> findLockettable(Vector3i sign) {
@@ -326,11 +287,11 @@ public class LockScanner {
 		return loc.get() instanceof TileEntityCarrier;
 	}
 	/** from a snapshot (= extentdelta) we can't retrieve tileentities. So I have to go back to a Location
-	 * Hacky, not at all dynamic or suitable for spongeforgem but for me that's ok */
-	Optional<SignData> getSignData(Vector3i at) {
+	 * Hacky, not at all dynamic or suitable for spongeforge but for me that's ok */
+	Optional<LockData> getSignData(Vector3i at) {
 		Optional<TileEntity> loc = delta.getExtent().getTileEntity(at);
 		if (!loc.isPresent()) return Optional.empty();
-		return loc.get().get(SignData.class);
+		return DataWrapper.getLockKey(loc.get());
 	}
 	boolean isBlockLockettable(Vector3i block) {
 		BlockState state = state(block);

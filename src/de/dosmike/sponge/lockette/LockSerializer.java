@@ -54,6 +54,8 @@ public class LockSerializer implements TypeSerializer<PluginLock> {
     @Override
     public PluginLock deserialize(TypeToken<?> type, ConfigurationNode cfg) throws ObjectMappingException {
 		PluginLock lock = new PluginLock();
+		String tmp = cfg.getNode("owner").getString();
+		lock.owner = tmp==null?null:UUID.fromString(tmp);
     	lock.active = cfg.getNode("active").getBoolean();
     	lock.permission = cfg.getNode("permission").getString();
 		lock.permitted = (List<UUID>)cfg.getNode("permitted").getValue(tokenListUUID);
@@ -71,7 +73,8 @@ public class LockSerializer implements TypeSerializer<PluginLock> {
 
     @Override
     public void serialize(TypeToken<?> type, PluginLock obj, ConfigurationNode cfg) throws ObjectMappingException {
-        	cfg.getNode("active").setValue(obj.active);
+    		cfg.getNode("active").setValue(obj.active);
+    		cfg.getNode("owner").setValue(obj.owner.toString());
         	cfg.getNode("permission").setValue(obj.permission);
         	cfg.getNode("permitted").setValue(tokenListUUID, obj.permitted);
         	cfg.getNode("pluginID").setValue(obj.pluginID);
