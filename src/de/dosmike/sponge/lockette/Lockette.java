@@ -5,17 +5,24 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import org.apache.commons.lang3.StringUtils;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.spec.CommandSpec;
 import org.spongepowered.api.config.DefaultConfig;
+import org.spongepowered.api.data.key.Key;
 import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.game.GameReloadEvent;
+import org.spongepowered.api.event.game.state.GamePreInitializationEvent;
 import org.spongepowered.api.event.game.state.GameStartedServerEvent;
 import org.spongepowered.api.event.game.state.GameStoppingEvent;
 import org.spongepowered.api.plugin.Plugin;
 import org.spongepowered.api.plugin.PluginContainer;
+import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColor;
 import org.spongepowered.api.text.format.TextColors;
@@ -26,6 +33,8 @@ import com.flowpowered.math.vector.Vector3i;
 import com.google.common.reflect.TypeToken;
 import com.google.inject.Inject;
 
+import de.dosmike.sponge.lockette.data.LockData;
+import de.dosmike.sponge.lockette.data.LockKeys;
 import ninja.leaping.configurate.ConfigurationNode;
 import ninja.leaping.configurate.ConfigurationOptions;
 import ninja.leaping.configurate.commented.CommentedConfigurationNode;
@@ -33,9 +42,9 @@ import ninja.leaping.configurate.loader.ConfigurationLoader;
 import ninja.leaping.configurate.objectmapping.serialize.TypeSerializerCollection;
 import ninja.leaping.configurate.objectmapping.serialize.TypeSerializers;
 
-@Plugin(id = "dosmike_lockette", name = "Lockette", version = "1.1")
+@Plugin(id = "dosmike_lockette", name = "Lockette", version = "1.2")
 public class Lockette {
-	
+		
 	/** Not doing anything, empty Java main */
 	public static void main(String[] args) {
 		System.out.println("This jar can not be run as executable!");
@@ -55,17 +64,57 @@ public class Lockette {
 		}
 		Sponge.getServer().getBroadcastChannel().send(tb.build());
 	}
+
+	Optional<UserStorageService> userStorage;
+	public static Optional<User> getUser(UUID by) {
+		 Optional<Player> onlinePlayer = Sponge.getServer().getPlayer(by);
+		return onlinePlayer
+				.map(player -> Optional.of((User) player))
+				.orElseGet(() -> getInstance().userStorage.get().get(by));
+	}
+	
+	@Listener
+	public void onPreInit(GamePreInitializationEvent event) {
+		Key<?> key = LockKeys.LOCK; //force load the class
+		DataWrapper.registerKeys();
+	}
 	
 	@Listener
 	public void onServerStart(GameStartedServerEvent event) {
 		PluginContainer self = Sponge.getPluginManager().fromInstance(this).get();
+		userStorage = Sponge.getServiceManager().provide(UserStorageService.class);
 		log(TextColors.LIGHT_PURPLE, "Version " + self.getVersion().get() + " by " + StringUtils.join(self.getAuthors(), ", "));
+
+		log(TextColors.LIGHT_PURPLE, "Sponge API MAJOR: ", TextColors.WHITE, DataWrapper.SPONGE_API_MAJOR);
 		
 		//add event listener
 		Sponge.getEventManager().registerListeners(this, new CommonEventListener(Sponge.getPluginManager().fromInstance(this).get()));
 		
 		//load containers locked by plugins
 		load();
+		
+		Sponge.getCommandManager().register(this, CommandSpec.builder()
+				.executor((src, args)->{
+					if (src instanceof Player) {
+						Player p = ((Player) src);
+						LockData ld = new LockData();
+						ld.setOwner(p.getProfile());
+						p.sendMessage(Text.of("Created "+ld.toContainer()));
+						
+						p.offer(/*LockKeys.LOCK,*/ ld);
+						p.get(LockKeys.LOCK).ifPresent(l->p.sendMessage(Text.of("Set key to player")));
+						
+						Lockette.log("State: " + p.toContainer());
+						
+						p.sendMessage(Text.of("Player supports LockKey? ", p.supports(LockKeys.LOCK)));
+						
+						p.remove(LockKeys.LOCK);
+						p.get(LockKeys.LOCK).ifPresent(l->p.sendMessage(Text.of("Was unable to remove Key")));
+					}
+					
+					return CommandResult.success();
+				})
+				.build(), "lockette");
 		
 		log(TextColors.LIGHT_PURPLE, "Thank you for using this plugin!");
 	}
@@ -144,36 +193,33 @@ public class Lockette {
 		return true;
 	}
 	
-	public static boolean hasAccess(Player source, ExtentDelta<World> delta, Location<World> target) {
-//		if (!target.getExtent().equals(delta.getExtent())) throw new IllegalArgumentException("Target not in delta extent");
+	public static boolean hasAccess(UUID source, ExtentDelta<World> delta, Location<World> target) {
 		return hasAccess(source, new LockScanner(delta).getLocksFor(target.getBlockPosition()));
 	}
-	public static boolean hasAccess(Player source, ExtentDelta<World> delta, Vector3i target) {
-//		if (!target.getExtent().equals(delta.getExtent())) throw new IllegalArgumentException("Target not in delta extent");
+	public static boolean hasAccess(UUID source, ExtentDelta<World> delta, Vector3i target) {
 		return hasAccess(source, new LockScanner(delta).getLocksFor(target));
 	}
-	public static boolean hasAccess(Player source, Location<World> target) {
+	public static boolean hasAccess(UUID source, Location<World> target) {
 		return hasAccess(source, new LockScanner(target.getExtent()).getLocksFor(target.getBlockPosition()));
 	}
-	public static boolean hasAccess(Player source, Set<Lock> locks) {
+	public static boolean hasAccess(UUID source, Set<Lock> locks) {
 		if (locks.isEmpty()) return true;
 		for (Lock lock : locks) {
-//			if (lock.canBypass(source)) {
-//				log("Bypassed");
-//				return true;
-//			}
-//			if (!lock.isLocked()) {
-//				log("Unlocked");
-//				return true;
-//			}
-//			if (lock.hasAccess(source)) {
-//				log("Permitted");
-//				return true;
-//			}
 			if (lock.canBypass(source) || !lock.isLocked() || lock.hasAccess(source)) return true;
 		}
 		return false;
 	}
+	
+	public static boolean isFullOwner(UUID source, ExtentDelta<World> delta, Vector3i target) {
+		return isFullOwner(source, new LockScanner(delta).getLocksFor(target));
+	}
+	public static boolean isFullOwner(UUID source, Set<Lock> locks) {
+		if (locks.isEmpty()) return true;
+		for (Lock lock : locks)
+			if (!lock.isOwner(source)) return false;
+		return true;
+	}
+	
 	
 	@Inject
 	@DefaultConfig(sharedRoot = true)
@@ -228,4 +274,5 @@ public class Lockette {
 	static Lockette getInstance() {
 		return (Lockette)Sponge.getPluginManager().getPlugin("dosmike_lockette").get().getInstance().get();
 	}
+
 }
